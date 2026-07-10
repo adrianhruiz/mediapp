@@ -11,7 +11,7 @@ class MedicApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
-        container = AppContainer()
+        container = AppContainer(applicationContext)
         NotificationChannels.create(this)
     }
 }
