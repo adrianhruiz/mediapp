@@ -1,5 +1,6 @@
 package com.medicapp.di
 
+import android.content.Context
 import com.medicapp.data.remote.NetworkModule
 import com.medicapp.data.remote.firebase.FirebaseModule
 import com.medicapp.data.repository.AllergyRepository
@@ -15,16 +16,18 @@ import com.medicapp.data.repository.MedicationSearchRepository
 import com.medicapp.data.repository.ReasonRepository
 import com.medicapp.data.repository.ScheduleRepository
 
-class AppContainer {
+class AppContainer(context: Context) {
+
+    private val networkModule = NetworkModule(context)
 
     val authRepository: AuthRepository =
         FirebaseAuthRepository(FirebaseModule.auth, FirebaseModule.firestore)
 
     val medicationSearchRepository: MedicationSearchRepository =
-        MedicationSearchRepository(NetworkModule.cimaApiService)
+        MedicationSearchRepository(networkModule.cimaApiService)
 
     val medicationCatalogRepository: MedicationCatalogRepository =
-        MedicationCatalogRepository(NetworkModule.cimaApiService)
+        MedicationCatalogRepository(networkModule.cimaApiService)
 
     val medicationHistoryRepository: MedicationHistoryRepository =
         FirestoreMedicationHistoryRepository(FirebaseModule.firestore, authRepository)
