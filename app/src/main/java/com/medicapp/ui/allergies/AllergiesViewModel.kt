@@ -9,6 +9,7 @@ import com.medicapp.MedicApp
 import com.medicapp.data.repository.AllergyRepository
 import com.medicapp.data.repository.MedicationCatalogRepository
 import com.medicapp.model.Allergy
+import com.medicapp.model.AllergyType
 import com.medicapp.model.AtcCode
 import com.medicapp.model.PrincipioActivo
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -103,10 +104,16 @@ class AllergiesViewModel(
     }
 
     fun addIngredientAllergy(principioActivo: PrincipioActivo) {
+        val alreadyAdded = allergies.value.any {
+            it.tipo == AllergyType.PRINCIPIO_ACTIVO && it.principioActivoId == principioActivo.id
+        }
+        if (alreadyAdded) return
         viewModelScope.launch { allergyRepository.addPrincipioActivo(principioActivo.id, principioActivo.nombre) }
     }
 
     fun addFamilyAllergy(atc: AtcCode) {
+        val alreadyAdded = allergies.value.any { it.tipo == AllergyType.FAMILIA && it.atcCodigo == atc.codigo }
+        if (alreadyAdded) return
         viewModelScope.launch { allergyRepository.addFamilia(atc.codigo, atc.nombre) }
     }
 
