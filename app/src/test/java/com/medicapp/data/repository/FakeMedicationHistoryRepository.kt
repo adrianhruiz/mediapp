@@ -3,6 +3,7 @@ package com.medicapp.data.repository
 import com.medicapp.model.TakenEntry
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.map
 
 class FakeMedicationHistoryRepository(
     initialEntries: List<TakenEntry> = emptyList(),
@@ -14,7 +15,10 @@ class FakeMedicationHistoryRepository(
 
     val entries: List<TakenEntry> get() = entriesFlow.value
 
-    override fun getAll(): Flow<List<TakenEntry>> = entriesFlow
+    override fun getPage(limit: Long): Flow<PagedResult<TakenEntry>> = entriesFlow.map { entries ->
+        val page = entries.take(limit.toInt())
+        PagedResult(items = page, hasMore = page.size.toLong() >= limit, isFromCache = false)
+    }
 
     override suspend fun getById(id: String): TakenEntry? = entriesFlow.value.firstOrNull { it.id == id }
 

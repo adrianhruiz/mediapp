@@ -107,6 +107,28 @@ class HistoryViewModelTest {
     }
 
     @Test
+    fun `loadMore grows the loaded window until hasMore is false`() = runTest(dispatcher) {
+        val entries = (1..25).map { entry("$it", "Medicamento $it", "r1", "Dolor de cabeza") }
+        val historyRepository = FakeMedicationHistoryRepository(entries)
+        val viewModel = HistoryViewModel(historyRepository, FakeReasonRepository())
+        val entriesJob = launch { viewModel.entries.collect {} }
+        val hasMoreJob = launch { viewModel.hasMore.collect {} }
+        runCurrent()
+
+        assertEquals(20, viewModel.entries.value.size)
+        assertTrue(viewModel.hasMore.value)
+
+        viewModel.loadMore()
+        runCurrent()
+
+        assertEquals(25, viewModel.entries.value.size)
+        assertFalse(viewModel.hasMore.value)
+
+        entriesJob.cancel()
+        hasMoreJob.cancel()
+    }
+
+    @Test
     fun `exposes the available reasons for the filter dropdown`() = runTest(dispatcher) {
         val reasonRepository = FakeReasonRepository(
             initialReasons = listOf(Reason(id = "r1", nombre = "Dolor de cabeza")),

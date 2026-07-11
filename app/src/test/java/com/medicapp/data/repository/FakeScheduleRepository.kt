@@ -7,6 +7,7 @@ import com.medicapp.model.MedicationSchedule
 import com.medicapp.model.ScheduleStatus
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.map
 
 class FakeScheduleRepository : ScheduleRepository {
 
@@ -23,6 +24,11 @@ class FakeScheduleRepository : ScheduleRepository {
     fun dosesSnapshot(scheduleId: String): List<MedicationDose> = dosesFlow(scheduleId).value
 
     override fun getSchedules(): Flow<List<MedicationSchedule>> = schedulesFlow
+
+    override fun getSchedulesPage(limit: Long): Flow<PagedResult<MedicationSchedule>> = schedulesFlow.map { schedules ->
+        val page = schedules.take(limit.toInt())
+        PagedResult(items = page, hasMore = page.size.toLong() >= limit, isFromCache = false)
+    }
 
     override fun getDoses(scheduleId: String): Flow<List<MedicationDose>> = dosesFlow(scheduleId)
 

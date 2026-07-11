@@ -41,6 +41,28 @@ class FirestoreScheduleRepository(
         awaitClose { registration.remove() }
     }
 
+    override fun getSchedulesPage(limit: Long): Flow<PagedResult<MedicationSchedule>> = callbackFlow {
+        val registration = schedulesCollection()
+            .orderBy("createdAt", Query.Direction.DESCENDING)
+            .limit(limit)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    Log.w("ScheduleRepository", "Schedules page listener failed", error)
+                    trySend(PagedResult(emptyList(), hasMore = false, isFromCache = false))
+                    return@addSnapshotListener
+                }
+                val items = snapshot?.documents.orEmpty().mapNotNull { it.toMedicationSchedule() }
+                trySend(
+                    PagedResult(
+                        items = items,
+                        hasMore = items.size.toLong() >= limit,
+                        isFromCache = snapshot?.metadata?.isFromCache ?: false,
+                    ),
+                )
+            }
+        awaitClose { registration.remove() }
+    }
+
     override fun getDoses(scheduleId: String): Flow<List<MedicationDose>> = callbackFlow {
         val registration = dosesCollection(scheduleId)
             .orderBy("doseNumber")
