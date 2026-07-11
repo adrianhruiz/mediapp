@@ -7,28 +7,39 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.medicapp.MedicApp
 import com.medicapp.data.repository.MedicationSearchRepository
+import com.medicapp.data.repository.ScheduleRepository
+import com.medicapp.model.ScheduleStatus
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import java.io.IOException
 
 class SearchViewModel(
     private val repository: MedicationSearchRepository,
+    private val scheduleRepository: ScheduleRepository,
 ) : ViewModel() {
 
     private val _query = MutableStateFlow("")
     val query: StateFlow<String> = _query.asStateFlow()
 
+    private val savedNregistros: StateFlow<Set<String>> = scheduleRepository.getSchedules()
+        .map { schedules ->
+            schedules.filter { it.status == ScheduleStatus.ACTIVE }.map { it.nregistro }.toSet()
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptySet())
+
     @OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
-    val uiState: StateFlow<SearchUiState> = _query
+    private val searchResult: StateFlow<SearchUiState> = _query
         .debounce(350)
         .distinctUntilChanged()
         .flatMapLatest { text ->
@@ -56,6 +67,10 @@ class SearchViewModel(
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), SearchUiState.Idle)
 
+    val uiState: StateFlow<SearchUiState> = combine(searchResult, savedNregistros) { result, saved ->
+        if (result is SearchUiState.Success) result.copy(savedNregistros = saved) else result
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), SearchUiState.Idle)
+
     fun onQueryChanged(newQuery: String) {
         _query.value = newQuery
     }
@@ -64,7 +79,7 @@ class SearchViewModel(
         val Factory: ViewModelProvider.Factory = viewModelFactory {
             initializer {
                 val app = this[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY] as MedicApp
-                SearchViewModel(app.container.medicationSearchRepository)
+                SearchViewModel(app.container.medicationSearchRepository, app.container.scheduleRepository)
             }
         }
     }
