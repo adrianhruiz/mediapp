@@ -6,6 +6,7 @@ import com.medicapp.data.remote.dto.MaestrasResponseDto
 import com.medicapp.data.repository.FakeAllergyRepository
 import com.medicapp.data.repository.MedicationCatalogRepository
 import com.medicapp.model.AtcCode
+import com.medicapp.model.PrincipioActivo
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
@@ -74,6 +75,40 @@ class AllergiesViewModelTest {
 
         assertEquals(1, viewModel.allergies.value.size)
         assertEquals("J01C", viewModel.allergies.value.first().atcCodigo)
+        collectorJob.cancel()
+    }
+
+    @Test
+    fun `adding the same family allergy twice does not duplicate it`() = runTest(dispatcher) {
+        val allergyRepository = FakeAllergyRepository()
+        val viewModel = AllergiesViewModel(allergyRepository, MedicationCatalogRepository(FakeCimaApiService()))
+        val collectorJob = launch { viewModel.allergies.collect {} }
+        runCurrent()
+
+        val atc = AtcCode(codigo = "J01C", nombre = "Penicilinas", nivel = 3)
+        viewModel.addFamilyAllergy(atc)
+        advanceUntilIdle()
+        viewModel.addFamilyAllergy(atc)
+        advanceUntilIdle()
+
+        assertEquals(1, viewModel.allergies.value.size)
+        collectorJob.cancel()
+    }
+
+    @Test
+    fun `adding the same ingredient allergy twice does not duplicate it`() = runTest(dispatcher) {
+        val allergyRepository = FakeAllergyRepository()
+        val viewModel = AllergiesViewModel(allergyRepository, MedicationCatalogRepository(FakeCimaApiService()))
+        val collectorJob = launch { viewModel.allergies.collect {} }
+        runCurrent()
+
+        val principioActivo = PrincipioActivo(id = 42, nombre = "Ibuprofeno")
+        viewModel.addIngredientAllergy(principioActivo)
+        advanceUntilIdle()
+        viewModel.addIngredientAllergy(principioActivo)
+        advanceUntilIdle()
+
+        assertEquals(1, viewModel.allergies.value.size)
         collectorJob.cancel()
     }
 

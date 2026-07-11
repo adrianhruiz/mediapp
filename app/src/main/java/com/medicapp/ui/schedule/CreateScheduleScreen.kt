@@ -83,6 +83,22 @@ fun CreateScheduleScreen(
             modifier = Modifier.padding(top = 8.dp, bottom = 16.dp),
         )
 
+        if (uiState.hasDuplicateActiveSchedule) {
+            Card(
+                modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+                colors = androidx.compose.material3.CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.errorContainer,
+                ),
+            ) {
+                Text(
+                    "Ya tienes un recordatorio activo para este medicamento. " +
+                        "Ciérralo antes de crear uno nuevo.",
+                    color = MaterialTheme.colorScheme.onErrorContainer,
+                    modifier = Modifier.padding(12.dp),
+                )
+            }
+        }
+
         Text("Frecuencia", style = MaterialTheme.typography.titleMedium)
         Row(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -156,7 +172,8 @@ fun CreateScheduleScreen(
                 onClick = { viewModel.save(context) },
                 enabled = uiState.reasonInput.isNotBlank() &&
                     uiState.intervalHoursInput.isNotBlank() &&
-                    uiState.totalDosesInput.isNotBlank(),
+                    uiState.totalDosesInput.isNotBlank() &&
+                    !uiState.hasDuplicateActiveSchedule,
             ) {
                 Text("Guardar")
             }

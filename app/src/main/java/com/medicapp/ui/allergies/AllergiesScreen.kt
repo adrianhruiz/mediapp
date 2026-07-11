@@ -147,10 +147,22 @@ fun AllergiesScreen(
                     modifier = Modifier.fillMaxWidth().padding(16.dp),
                 )
                 is CatalogSearchUiState.IngredientResults -> state.items.forEach { item ->
-                    IngredientResultRow(item = item, onAdd = { viewModel.addIngredientAllergy(item) })
+                    val alreadyAdded = allergies.any {
+                        it.tipo == AllergyType.PRINCIPIO_ACTIVO && it.principioActivoId == item.id
+                    }
+                    IngredientResultRow(
+                        item = item,
+                        alreadyAdded = alreadyAdded,
+                        onAdd = { viewModel.addIngredientAllergy(item) },
+                    )
                 }
                 is CatalogSearchUiState.FamilyResults -> state.items.forEach { item ->
-                    FamilyResultRow(item = item, onAdd = { viewModel.addFamilyAllergy(item) })
+                    val alreadyAdded = allergies.any { it.tipo == AllergyType.FAMILIA && it.atcCodigo == item.codigo }
+                    FamilyResultRow(
+                        item = item,
+                        alreadyAdded = alreadyAdded,
+                        onAdd = { viewModel.addFamilyAllergy(item) },
+                    )
                 }
             }
         }
@@ -183,12 +195,12 @@ private fun AllergyRow(allergy: Allergy, onDelete: () -> Unit) {
 }
 
 @Composable
-private fun IngredientResultRow(item: PrincipioActivo, onAdd: () -> Unit) {
+private fun IngredientResultRow(item: PrincipioActivo, alreadyAdded: Boolean, onAdd: () -> Unit) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 4.dp)
-            .clickable(onClick = onAdd),
+            .clickable(enabled = !alreadyAdded, onClick = onAdd),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(12.dp),
@@ -196,18 +208,22 @@ private fun IngredientResultRow(item: PrincipioActivo, onAdd: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(item.nombre, style = MaterialTheme.typography.bodyLarge)
-            Icon(Icons.Default.Add, contentDescription = "Añadir alergia")
+            if (alreadyAdded) {
+                Text("Ya añadida", style = MaterialTheme.typography.labelMedium)
+            } else {
+                Icon(Icons.Default.Add, contentDescription = "Añadir alergia")
+            }
         }
     }
 }
 
 @Composable
-private fun FamilyResultRow(item: AtcCode, onAdd: () -> Unit) {
+private fun FamilyResultRow(item: AtcCode, alreadyAdded: Boolean, onAdd: () -> Unit) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 4.dp)
-            .clickable(onClick = onAdd),
+            .clickable(enabled = !alreadyAdded, onClick = onAdd),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(12.dp),
@@ -218,7 +234,11 @@ private fun FamilyResultRow(item: AtcCode, onAdd: () -> Unit) {
                 Text(item.nombre, style = MaterialTheme.typography.bodyLarge)
                 Text(item.codigo, style = MaterialTheme.typography.bodySmall)
             }
-            Icon(Icons.Default.Add, contentDescription = "Añadir alergia")
+            if (alreadyAdded) {
+                Text("Ya añadida", style = MaterialTheme.typography.labelMedium)
+            } else {
+                Icon(Icons.Default.Add, contentDescription = "Añadir alergia")
+            }
         }
     }
 }

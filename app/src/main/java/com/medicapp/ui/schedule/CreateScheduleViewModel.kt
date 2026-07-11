@@ -12,10 +12,12 @@ import com.medicapp.MedicApp
 import com.medicapp.data.repository.ReasonRepository
 import com.medicapp.data.repository.ScheduleRepository
 import com.medicapp.model.Reason
+import com.medicapp.model.ScheduleStatus
 import com.medicapp.notifications.DoseAlarmScheduler
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -28,6 +30,7 @@ data class CreateScheduleUiState(
     val startAtMillis: Long = System.currentTimeMillis(),
     val isSaved: Boolean = false,
     val needsExactAlarmPermission: Boolean = false,
+    val hasDuplicateActiveSchedule: Boolean = false,
 )
 
 private const val MAX_SUGGESTIONS = 5
@@ -53,6 +56,12 @@ class CreateScheduleViewModel(
                 allReasons = reasons
                 recomputeSuggestions()
             }
+        }
+        viewModelScope.launch {
+            val hasDuplicate = scheduleRepository.getSchedules().first().any {
+                it.status == ScheduleStatus.ACTIVE && it.nregistro == nregistroArg
+            }
+            _uiState.update { it.copy(hasDuplicateActiveSchedule = hasDuplicate) }
         }
     }
 
@@ -104,6 +113,7 @@ class CreateScheduleViewModel(
         val intervalHours = state.intervalHoursInput.toIntOrNull() ?: return
         val totalDoses = state.totalDosesInput.toIntOrNull() ?: return
         if (intervalHours < 1 || totalDoses < 1 || state.reasonInput.isBlank()) return
+        if (state.hasDuplicateActiveSchedule) return
 
         if (!DoseAlarmScheduler.canScheduleExactAlarms(context)) {
             _uiState.update { it.copy(needsExactAlarmPermission = true) }
