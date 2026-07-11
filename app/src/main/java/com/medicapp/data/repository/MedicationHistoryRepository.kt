@@ -5,7 +5,7 @@ import kotlinx.coroutines.flow.Flow
 
 interface MedicationHistoryRepository {
 
-    fun getAll(): Flow<List<TakenEntry>>
+    fun getPage(limit: Long): Flow<PagedResult<TakenEntry>>
 
     suspend fun getById(id: String): TakenEntry?
 

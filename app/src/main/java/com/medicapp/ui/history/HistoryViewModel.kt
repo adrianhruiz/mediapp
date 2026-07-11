@@ -7,16 +7,21 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.medicapp.MedicApp
 import com.medicapp.data.repository.MedicationHistoryRepository
+import com.medicapp.data.repository.PagedResult
+import com.medicapp.data.repository.PagingDefaults
 import com.medicapp.data.repository.ReasonRepository
 import com.medicapp.model.Reason
 import com.medicapp.model.TakenEntry
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 class HistoryViewModel(
@@ -33,8 +38,28 @@ class HistoryViewModel(
     val reasons: StateFlow<List<Reason>> = reasonRepository.getAll()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    private val allEntries: StateFlow<List<TakenEntry>> = repository.getAll()
+    private val _limit = MutableStateFlow(PagingDefaults.PAGE_SIZE)
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private val historyPage: StateFlow<PagedResult<TakenEntry>> = _limit
+        .flatMapLatest { limit -> repository.getPage(limit) }
+        .stateIn(
+            viewModelScope,
+            SharingStarted.WhileSubscribed(5000),
+            PagedResult(items = emptyList(), hasMore = true, isFromCache = false),
+        )
+
+    private val allEntries: StateFlow<List<TakenEntry>> = historyPage
+        .map { it.items }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val hasMore: StateFlow<Boolean> = historyPage
+        .map { it.hasMore }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+
+    val isOffline: StateFlow<Boolean> = historyPage
+        .map { it.isFromCache }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
     val entries: StateFlow<List<TakenEntry>> = combine(
         allEntries,
@@ -66,6 +91,12 @@ class HistoryViewModel(
     fun delete(entry: TakenEntry) {
         viewModelScope.launch {
             repository.delete(entry)
+        }
+    }
+
+    fun loadMore() {
+        if (historyPage.value.hasMore) {
+            _limit.update { it + PagingDefaults.PAGE_INCREMENT }
         }
     }
 

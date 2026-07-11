@@ -10,6 +10,8 @@ interface ScheduleRepository {
 
     fun getSchedules(): Flow<List<MedicationSchedule>>
 
+    fun getSchedulesPage(limit: Long): Flow<PagedResult<MedicationSchedule>>
+
     fun getDoses(scheduleId: String): Flow<List<MedicationDose>>
 
     suspend fun getSchedule(scheduleId: String): MedicationSchedule?

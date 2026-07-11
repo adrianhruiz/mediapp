@@ -20,16 +20,24 @@ class FirestoreMedicationHistoryRepository(
         .document(authRepository.currentUserId ?: error("No hay sesión iniciada"))
         .collection("takenMedications")
 
-    override fun getAll(): Flow<List<TakenEntry>> = callbackFlow {
+    override fun getPage(limit: Long): Flow<PagedResult<TakenEntry>> = callbackFlow {
         val registration = collection()
             .orderBy("timestamp", Query.Direction.DESCENDING)
+            .limit(limit)
             .addSnapshotListener { snapshot, error ->
                 if (error != null) {
                     Log.w("MedicationHistoryRepository", "Taken medications listener failed", error)
-                    trySend(emptyList())
+                    trySend(PagedResult(emptyList(), hasMore = false, isFromCache = false))
                     return@addSnapshotListener
                 }
-                trySend(snapshot?.documents.orEmpty().mapNotNull { it.toTakenEntry() })
+                val items = snapshot?.documents.orEmpty().mapNotNull { it.toTakenEntry() }
+                trySend(
+                    PagedResult(
+                        items = items,
+                        hasMore = items.size.toLong() >= limit,
+                        isFromCache = snapshot?.metadata?.isFromCache ?: false,
+                    ),
+                )
             }
         awaitClose { registration.remove() }
     }

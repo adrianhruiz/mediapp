@@ -10,12 +10,14 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuAnchorType
@@ -41,6 +43,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.medicapp.model.Reason
 import com.medicapp.model.TakenEntry
 import com.medicapp.ui.components.MedicationThumbnail
+import com.medicapp.ui.components.OnBottomReached
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -57,7 +60,11 @@ fun HistoryScreen(
     val reasons by viewModel.reasons.collectAsStateWithLifecycle()
     val selectedReasonId by viewModel.selectedReasonId.collectAsStateWithLifecycle()
     val hasAnyEntries by viewModel.hasAnyEntries.collectAsStateWithLifecycle()
+    val hasMore by viewModel.hasMore.collectAsStateWithLifecycle()
+    val isOffline by viewModel.isOffline.collectAsStateWithLifecycle()
     var entryPendingDelete by remember { mutableStateOf<TakenEntry?>(null) }
+    val listState = rememberLazyListState()
+    listState.OnBottomReached(onLoadMore = viewModel::loadMore)
 
     Column(
         modifier = Modifier
@@ -105,7 +112,15 @@ fun HistoryScreen(
                 )
             }
         } else {
+            if (isOffline) {
+                Text(
+                    "Sin conexión · mostrando datos guardados",
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                )
+            }
             LazyColumn(
+                state = listState,
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f)
@@ -118,6 +133,13 @@ fun HistoryScreen(
                         onEdit = { onEditEntry(entry) },
                         onDelete = { entryPendingDelete = entry },
                     )
+                }
+                if (hasMore) {
+                    item {
+                        Box(modifier = Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator()
+                        }
+                    }
                 }
             }
         }
