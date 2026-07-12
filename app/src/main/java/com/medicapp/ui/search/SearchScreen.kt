@@ -15,12 +15,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.AssistChip
-import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -32,6 +31,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.medicapp.model.Medication
+import com.medicapp.ui.components.AddedChip
 import com.medicapp.ui.components.MedicationThumbnail
 import com.medicapp.ui.components.SearchHelpButton
 
@@ -91,6 +91,7 @@ fun SearchScreen(
                         MedicationResultCard(
                             medication = medication,
                             isSaved = medication.nregistro in state.savedNregistros,
+                            isInHistory = medication.nregistro in state.historyNregistros,
                             onClick = { onOpenDetail(medication) },
                         )
                     }
@@ -108,7 +109,12 @@ private fun HintMessage(text: String) {
 }
 
 @Composable
-private fun MedicationResultCard(medication: Medication, isSaved: Boolean, onClick: () -> Unit) {
+private fun MedicationResultCard(
+    medication: Medication,
+    isSaved: Boolean,
+    isInHistory: Boolean,
+    onClick: () -> Unit,
+) {
     Card(modifier = Modifier.fillMaxWidth().clickable(onClick = onClick)) {
         Row(
             modifier = Modifier
@@ -119,20 +125,16 @@ private fun MedicationResultCard(medication: Medication, isSaved: Boolean, onCli
         ) {
             MedicationThumbnail(fotoUrl = medication.fotoUrl, modifier = Modifier.padding(end = 12.dp))
             Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
-                Text(medication.nombre, style = androidx.compose.material3.MaterialTheme.typography.titleMedium)
-                medication.labtitular?.let { Text(it, style = androidx.compose.material3.MaterialTheme.typography.bodySmall) }
-                medication.dosis?.let { Text(it, style = androidx.compose.material3.MaterialTheme.typography.bodySmall) }
+                Text(medication.nombre, style = MaterialTheme.typography.titleMedium)
+                medication.labtitular?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+                medication.dosis?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+                if (isInHistory) {
+                    AddedChip("Ya en tu historial", modifier = Modifier.padding(top = 4.dp))
+                }
                 if (isSaved) {
-                    AssistChip(
-                        onClick = {},
-                        enabled = false,
-                        label = { Text("Ya lo tienes guardado") },
-                        leadingIcon = { Icon(Icons.Default.Bookmark, contentDescription = null) },
-                        colors = AssistChipDefaults.assistChipColors(
-                            disabledContainerColor = androidx.compose.material3.MaterialTheme.colorScheme.secondaryContainer,
-                            disabledLabelColor = androidx.compose.material3.MaterialTheme.colorScheme.onSecondaryContainer,
-                            disabledLeadingIconContentColor = androidx.compose.material3.MaterialTheme.colorScheme.onSecondaryContainer,
-                        ),
+                    AddedChip(
+                        "Ya lo tienes guardado",
+                        icon = Icons.Default.Bookmark,
                         modifier = Modifier.padding(top = 4.dp),
                     )
                 }

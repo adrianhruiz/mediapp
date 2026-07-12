@@ -56,6 +56,18 @@ class FirestoreMedicationHistoryRepository(
         awaitClose { registration.remove() }
     }
 
+    override fun getMedicationNregistros(): Flow<Set<String>> = callbackFlow {
+        val registration = collection().addSnapshotListener { snapshot, error ->
+            if (error != null) {
+                Log.w("MedicationHistoryRepository", "Medication nregistros listener failed", error)
+                trySend(emptySet())
+                return@addSnapshotListener
+            }
+            trySend(snapshot?.documents.orEmpty().mapNotNull { it.getString("nregistro") }.toSet())
+        }
+        awaitClose { registration.remove() }
+    }
+
     override suspend fun getById(id: String): TakenEntry? =
         collection().document(id).get().await().toTakenEntry()
 

@@ -10,6 +10,7 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import com.medicapp.MedicApp
 import com.medicapp.data.repository.AllergyRepository
 import com.medicapp.data.repository.MedicationCatalogRepository
+import com.medicapp.data.repository.MedicationHistoryRepository
 import com.medicapp.domain.AllergyChecker
 import com.medicapp.model.Allergy
 import com.medicapp.model.AllergyMatch
@@ -31,14 +32,19 @@ data class MedicationDetailUiState(
     val allergies: List<Allergy> = emptyList(),
     val matches: List<AllergyMatch> = emptyList(),
     val errorMessage: String? = null,
+    /** Motivos con los que este medicamento ya está en el historial. */
+    val historyReasons: List<String> = emptyList(),
 ) {
     /** Un medicamento desrecomendado por alergia no puede añadirse al historial. */
     val canAddToHistory: Boolean get() = medication != null && matches.isEmpty()
+
+    val isInHistory: Boolean get() = historyReasons.isNotEmpty()
 }
 
 class MedicationDetailViewModel(
     private val catalogRepository: MedicationCatalogRepository,
     private val allergyRepository: AllergyRepository,
+    historyRepository: MedicationHistoryRepository,
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
@@ -63,6 +69,12 @@ class MedicationDetailViewModel(
             .onEach { allergies ->
                 _uiState.update { it.copy(allergies = allergies) }
                 recomputeMatches()
+            }
+            .launchIn(viewModelScope)
+
+        historyRepository.getByMedication(nregistro)
+            .onEach { entries ->
+                _uiState.update { state -> state.copy(historyReasons = entries.map { it.reasonNombre }) }
             }
             .launchIn(viewModelScope)
     }
@@ -106,6 +118,7 @@ class MedicationDetailViewModel(
                 MedicationDetailViewModel(
                     app.container.medicationCatalogRepository,
                     app.container.allergyRepository,
+                    app.container.medicationHistoryRepository,
                     createSavedStateHandle(),
                 )
             }
