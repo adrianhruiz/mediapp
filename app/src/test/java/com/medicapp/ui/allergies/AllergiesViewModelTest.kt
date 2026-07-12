@@ -113,6 +113,146 @@ class AllergiesViewModelTest {
     }
 
     @Test
+    fun `adding all search results marks every family found for the keyword`() = runTest(dispatcher) {
+        val response = MaestrasResponseDto(
+            totalFilas = 2,
+            pagina = 1,
+            tamanioPagina = 200,
+            resultados = listOf(
+                MaestraItemDto(codigo = "J01C", nombre = "Penicilinas"),
+                MaestraItemDto(codigo = "J01CA", nombre = "Penicilinas de amplio espectro"),
+            ),
+        )
+        val viewModel = AllergiesViewModel(
+            FakeAllergyRepository(),
+            MedicationCatalogRepository(FakeCimaApiService(maestrasResponse = response)),
+        )
+        val searchJob = launch { viewModel.searchState.collect {} }
+        val allergiesJob = launch { viewModel.allergies.collect {} }
+
+        viewModel.onSearchModeChanged(AllergySearchMode.FAMILIA)
+        viewModel.onQueryChanged("penicilina")
+        advanceTimeBy(400)
+        runCurrent()
+
+        viewModel.addAllSearchResults()
+        advanceUntilIdle()
+
+        assertEquals(
+            listOf("J01C", "J01CA"),
+            viewModel.allergies.value.map { it.atcCodigo },
+        )
+        searchJob.cancel()
+        allergiesJob.cancel()
+    }
+
+    @Test
+    fun `adding all search results skips the ones already marked`() = runTest(dispatcher) {
+        val response = MaestrasResponseDto(
+            totalFilas = 2,
+            pagina = 1,
+            tamanioPagina = 200,
+            resultados = listOf(
+                MaestraItemDto(codigo = "J01C", nombre = "Penicilinas"),
+                MaestraItemDto(codigo = "J01CA", nombre = "Penicilinas de amplio espectro"),
+            ),
+        )
+        val viewModel = AllergiesViewModel(
+            FakeAllergyRepository(),
+            MedicationCatalogRepository(FakeCimaApiService(maestrasResponse = response)),
+        )
+        val searchJob = launch { viewModel.searchState.collect {} }
+        val allergiesJob = launch { viewModel.allergies.collect {} }
+
+        viewModel.addFamilyAllergy(AtcCode(codigo = "J01C", nombre = "Penicilinas", nivel = 3))
+        advanceUntilIdle()
+
+        viewModel.onSearchModeChanged(AllergySearchMode.FAMILIA)
+        viewModel.onQueryChanged("penicilina")
+        advanceTimeBy(400)
+        runCurrent()
+
+        viewModel.addAllSearchResults()
+        advanceUntilIdle()
+
+        assertEquals(
+            listOf("J01C", "J01CA"),
+            viewModel.allergies.value.map { it.atcCodigo },
+        )
+        searchJob.cancel()
+        allergiesJob.cancel()
+    }
+
+    @Test
+    fun `addableResultCount only counts results that are not already marked`() = runTest(dispatcher) {
+        val response = MaestrasResponseDto(
+            totalFilas = 2,
+            pagina = 1,
+            tamanioPagina = 200,
+            resultados = listOf(
+                MaestraItemDto(codigo = "J01C", nombre = "Penicilinas"),
+                MaestraItemDto(codigo = "J01CA", nombre = "Penicilinas de amplio espectro"),
+            ),
+        )
+        val viewModel = AllergiesViewModel(
+            FakeAllergyRepository(),
+            MedicationCatalogRepository(FakeCimaApiService(maestrasResponse = response)),
+        )
+        val searchJob = launch { viewModel.searchState.collect {} }
+        val allergiesJob = launch { viewModel.allergies.collect {} }
+        val countJob = launch { viewModel.addableResultCount.collect {} }
+
+        viewModel.onSearchModeChanged(AllergySearchMode.FAMILIA)
+        viewModel.onQueryChanged("penicilina")
+        advanceTimeBy(400)
+        runCurrent()
+
+        assertEquals(2, viewModel.addableResultCount.value)
+
+        viewModel.addFamilyAllergy(AtcCode(codigo = "J01C", nombre = "Penicilinas", nivel = 3))
+        advanceUntilIdle()
+
+        assertEquals(1, viewModel.addableResultCount.value)
+
+        searchJob.cancel()
+        allergiesJob.cancel()
+        countJob.cancel()
+    }
+
+    @Test
+    fun `adding all search results marks every ingredient found for the keyword`() = runTest(dispatcher) {
+        val response = MaestrasResponseDto(
+            totalFilas = 2,
+            pagina = 1,
+            tamanioPagina = 200,
+            resultados = listOf(
+                MaestraItemDto(id = 1, nombre = "Ibuprofeno"),
+                MaestraItemDto(id = 2, nombre = "Ibuprofeno arginina"),
+            ),
+        )
+        val viewModel = AllergiesViewModel(
+            FakeAllergyRepository(),
+            MedicationCatalogRepository(FakeCimaApiService(maestrasResponse = response)),
+        )
+        val searchJob = launch { viewModel.searchState.collect {} }
+        val allergiesJob = launch { viewModel.allergies.collect {} }
+
+        viewModel.onQueryChanged("ibuprofeno")
+        advanceTimeBy(400)
+        runCurrent()
+
+        viewModel.addAllSearchResults()
+        advanceUntilIdle()
+
+        assertEquals(
+            listOf("Ibuprofeno", "Ibuprofeno arginina"),
+            viewModel.allergies.value.map { it.principioActivoNombre },
+        )
+        searchJob.cancel()
+        allergiesJob.cancel()
+    }
+
+    @Test
     fun `deleting an allergy removes it from the list`() = runTest(dispatcher) {
         val allergyRepository = FakeAllergyRepository()
         val viewModel = AllergiesViewModel(allergyRepository, MedicationCatalogRepository(FakeCimaApiService()))

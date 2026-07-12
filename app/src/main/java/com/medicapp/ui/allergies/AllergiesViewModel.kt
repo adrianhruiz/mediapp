@@ -95,6 +95,15 @@ class AllergiesViewModel(
             }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), CatalogSearchUiState.Idle)
 
+    /** Cuántos resultados de la búsqueda actual todavía no están marcados como alergia. */
+    val addableResultCount: StateFlow<Int> = combine(searchState, allergies) { state, _ ->
+        when (state) {
+            is CatalogSearchUiState.IngredientResults -> state.items.count { !isIngredientAdded(it) }
+            is CatalogSearchUiState.FamilyResults -> state.items.count { !isFamilyAdded(it) }
+            else -> 0
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+
     fun onSearchModeChanged(mode: AllergySearchMode) {
         _searchMode.value = mode
     }
@@ -104,17 +113,35 @@ class AllergiesViewModel(
     }
 
     fun addIngredientAllergy(principioActivo: PrincipioActivo) {
-        val alreadyAdded = allergies.value.any {
-            it.tipo == AllergyType.PRINCIPIO_ACTIVO && it.principioActivoId == principioActivo.id
-        }
-        if (alreadyAdded) return
+        if (isIngredientAdded(principioActivo)) return
         viewModelScope.launch { allergyRepository.addPrincipioActivo(principioActivo.id, principioActivo.nombre) }
     }
 
     fun addFamilyAllergy(atc: AtcCode) {
-        val alreadyAdded = allergies.value.any { it.tipo == AllergyType.FAMILIA && it.atcCodigo == atc.codigo }
-        if (alreadyAdded) return
+        if (isFamilyAdded(atc)) return
         viewModelScope.launch { allergyRepository.addFamilia(atc.codigo, atc.nombre) }
+    }
+
+    fun addAllSearchResults() {
+        when (val state = searchState.value) {
+            is CatalogSearchUiState.IngredientResults -> viewModelScope.launch {
+                state.items.filterNot { isIngredientAdded(it) }
+                    .forEach { allergyRepository.addPrincipioActivo(it.id, it.nombre) }
+            }
+            is CatalogSearchUiState.FamilyResults -> viewModelScope.launch {
+                state.items.filterNot { isFamilyAdded(it) }
+                    .forEach { allergyRepository.addFamilia(it.codigo, it.nombre) }
+            }
+            else -> Unit
+        }
+    }
+
+    private fun isIngredientAdded(principioActivo: PrincipioActivo) = allergies.value.any {
+        it.tipo == AllergyType.PRINCIPIO_ACTIVO && it.principioActivoId == principioActivo.id
+    }
+
+    private fun isFamilyAdded(atc: AtcCode) = allergies.value.any {
+        it.tipo == AllergyType.FAMILIA && it.atcCodigo == atc.codigo
     }
 
     fun delete(allergy: Allergy) {
