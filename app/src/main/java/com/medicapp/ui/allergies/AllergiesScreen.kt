@@ -13,6 +13,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.DoneAll
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -23,6 +24,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -47,6 +49,7 @@ fun AllergiesScreen(
     val searchMode by viewModel.searchMode.collectAsStateWithLifecycle()
     val query by viewModel.query.collectAsStateWithLifecycle()
     val searchState by viewModel.searchState.collectAsStateWithLifecycle()
+    val addableResultCount by viewModel.addableResultCount.collectAsStateWithLifecycle()
 
     Column(
         modifier = Modifier
@@ -128,6 +131,22 @@ fun AllergiesScreen(
             },
             singleLine = true,
         )
+
+        if (addableResultCount > 0) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                horizontalArrangement = Arrangement.End,
+            ) {
+                TextButton(onClick = viewModel::addAllSearchResults) {
+                    Icon(
+                        Icons.Default.DoneAll,
+                        contentDescription = null,
+                        modifier = Modifier.padding(end = 8.dp),
+                    )
+                    Text("Añadir todas ($addableResultCount)")
+                }
+            }
+        }
 
         Column(modifier = Modifier.padding(top = 8.dp)) {
             when (val state = searchState) {
