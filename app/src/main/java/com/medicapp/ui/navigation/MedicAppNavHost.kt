@@ -209,6 +209,9 @@ private fun MainNavHost(startDestination: String, initialScheduleId: String?, on
                 HistoryScreen(
                     contentPadding = innerPadding,
                     onEditEntry = { entry -> navController.navigate("addEdit?entryId=${entry.id}") },
+                    onOpenMedication = { entry ->
+                        navController.navigate("medicationDetail/${encode(entry.nregistro)}")
+                    },
                 )
             }
             composable(ROUTE_REMINDERS) {
