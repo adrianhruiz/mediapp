@@ -115,6 +115,137 @@ class AddEditEntryViewModelTest {
     }
 
     @Test
+    fun `the same medication with the same reason cannot be added twice`() = runTest(dispatcher) {
+        val historyRepository = FakeMedicationHistoryRepository()
+        historyRepository.add(
+            nregistro = "1",
+            nombreMedicamento = "Ibuprofeno",
+            reasonId = "r1",
+            reasonNombre = "Dolor de cabeza",
+            dosisSnapshot = null,
+            fotoUrl = null,
+        )
+        val viewModel = AddEditEntryViewModel(
+            historyRepository,
+            FakeReasonRepository(initialReasons = listOf(Reason(id = "r1", nombre = "Dolor de cabeza"))),
+            SavedStateHandle(mapOf("nregistro" to "1", "nombre" to "Ibuprofeno")),
+        )
+        advanceUntilIdle()
+
+        viewModel.onReasonInputChanged("dolor de cabeza")
+        advanceUntilIdle()
+        assertTrue(viewModel.uiState.value.isDuplicate)
+        assertFalse(viewModel.uiState.value.canSave)
+
+        viewModel.save()
+        advanceUntilIdle()
+
+        assertEquals(1, historyRepository.entries.size)
+        assertFalse(viewModel.uiState.value.isSaved)
+    }
+
+    @Test
+    fun `the same medication with a different reason can be added`() = runTest(dispatcher) {
+        val historyRepository = FakeMedicationHistoryRepository()
+        historyRepository.add(
+            nregistro = "1",
+            nombreMedicamento = "Ibuprofeno",
+            reasonId = "r1",
+            reasonNombre = "Dolor de cabeza",
+            dosisSnapshot = null,
+            fotoUrl = null,
+        )
+        val viewModel = AddEditEntryViewModel(
+            historyRepository,
+            FakeReasonRepository(),
+            SavedStateHandle(mapOf("nregistro" to "1", "nombre" to "Ibuprofeno")),
+        )
+        advanceUntilIdle()
+
+        viewModel.onReasonInputChanged("Fiebre")
+        advanceUntilIdle()
+        assertFalse(viewModel.uiState.value.isDuplicate)
+
+        viewModel.save()
+        advanceUntilIdle()
+
+        assertEquals(2, historyRepository.entries.size)
+    }
+
+    @Test
+    fun `saving twice in a row only records one entry`() = runTest(dispatcher) {
+        val historyRepository = FakeMedicationHistoryRepository()
+        val viewModel = AddEditEntryViewModel(
+            historyRepository,
+            FakeReasonRepository(initialReasons = listOf(Reason(id = "r1", nombre = "Dolor de cabeza"))),
+            SavedStateHandle(mapOf("nregistro" to "1", "nombre" to "Ibuprofeno")),
+        )
+        advanceUntilIdle()
+
+        viewModel.onReasonInputChanged("Dolor de cabeza")
+        viewModel.save()
+        viewModel.save()
+        advanceUntilIdle()
+
+        assertEquals(1, historyRepository.entries.size)
+    }
+
+    @Test
+    fun `editing an entry cannot reuse a reason already registered for that medication`() = runTest(dispatcher) {
+        val historyRepository = FakeMedicationHistoryRepository()
+        val entryId = historyRepository.add(
+            nregistro = "1",
+            nombreMedicamento = "Ibuprofeno",
+            reasonId = "r1",
+            reasonNombre = "Dolor de cabeza",
+            dosisSnapshot = null,
+            fotoUrl = null,
+        )
+        historyRepository.add(
+            nregistro = "1",
+            nombreMedicamento = "Ibuprofeno",
+            reasonId = "r2",
+            reasonNombre = "Fiebre",
+            dosisSnapshot = null,
+            fotoUrl = null,
+        )
+        val viewModel = AddEditEntryViewModel(
+            historyRepository,
+            FakeReasonRepository(),
+            SavedStateHandle(mapOf("entryId" to entryId)),
+        )
+        advanceUntilIdle()
+
+        viewModel.onReasonInputChanged("Fiebre")
+        advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.isDuplicate)
+        assertFalse(viewModel.uiState.value.canSave)
+    }
+
+    @Test
+    fun `editing an entry keeping its own reason is not a duplicate`() = runTest(dispatcher) {
+        val historyRepository = FakeMedicationHistoryRepository()
+        val entryId = historyRepository.add(
+            nregistro = "1",
+            nombreMedicamento = "Ibuprofeno",
+            reasonId = "r1",
+            reasonNombre = "Dolor de cabeza",
+            dosisSnapshot = null,
+            fotoUrl = null,
+        )
+        val viewModel = AddEditEntryViewModel(
+            historyRepository,
+            FakeReasonRepository(),
+            SavedStateHandle(mapOf("entryId" to entryId)),
+        )
+        advanceUntilIdle()
+
+        assertFalse(viewModel.uiState.value.isDuplicate)
+        assertTrue(viewModel.uiState.value.canSave)
+    }
+
+    @Test
     fun `editing an existing entry loads its reason and updates it on save`() = runTest(dispatcher) {
         val historyRepository = FakeMedicationHistoryRepository()
         val reasonRepository = FakeReasonRepository()

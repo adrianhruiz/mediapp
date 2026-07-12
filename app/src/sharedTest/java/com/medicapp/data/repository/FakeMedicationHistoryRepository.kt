@@ -20,6 +20,10 @@ class FakeMedicationHistoryRepository(
         PagedResult(items = page, hasMore = page.size.toLong() >= limit, isFromCache = false)
     }
 
+    override fun getByMedication(nregistro: String): Flow<List<TakenEntry>> = entriesFlow.map { entries ->
+        entries.filter { it.nregistro == nregistro }
+    }
+
     override suspend fun getById(id: String): TakenEntry? = entriesFlow.value.firstOrNull { it.id == id }
 
     override suspend fun add(
@@ -30,6 +34,9 @@ class FakeMedicationHistoryRepository(
         dosisSnapshot: String?,
         fotoUrl: String?,
     ): String {
+        val duplicate = entriesFlow.value.firstOrNull { it.nregistro == nregistro && it.reasonId == reasonId }
+        if (duplicate != null) return duplicate.id
+
         val entry = TakenEntry(
             id = "entry-${nextId++}",
             nregistro = nregistro,
