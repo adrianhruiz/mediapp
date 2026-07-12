@@ -196,7 +196,7 @@ private fun AllergyRow(allergy: Allergy, onDelete: () -> Unit) {
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Column {
+            Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
                 Text(
                     if (allergy.tipo == AllergyType.PRINCIPIO_ACTIVO) "Componente activo" else "Familia",
                     style = MaterialTheme.typography.labelMedium,
@@ -205,6 +205,9 @@ private fun AllergyRow(allergy: Allergy, onDelete: () -> Unit) {
                     allergy.principioActivoNombre ?: allergy.atcNombre.orEmpty(),
                     style = MaterialTheme.typography.titleMedium,
                 )
+                allergy.atcCodigo?.let { codigo ->
+                    Text(codigo, style = MaterialTheme.typography.bodySmall)
+                }
             }
             IconButton(onClick = onDelete) {
                 Icon(Icons.Default.Delete, contentDescription = "Eliminar alergia")
