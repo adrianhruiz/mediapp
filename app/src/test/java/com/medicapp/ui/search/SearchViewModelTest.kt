@@ -3,6 +3,7 @@ package com.medicapp.ui.search
 import com.medicapp.data.remote.FakeCimaApiService
 import com.medicapp.data.remote.dto.MedicamentoDto
 import com.medicapp.data.remote.dto.MedicamentosResponseDto
+import com.medicapp.data.repository.FakeMedicationHistoryRepository
 import com.medicapp.data.repository.FakeScheduleRepository
 import com.medicapp.data.repository.MedicationSearchRepository
 import kotlinx.coroutines.Dispatchers
@@ -37,7 +38,11 @@ class SearchViewModelTest {
 
     @Test
     fun `starts in Idle state before typing anything`() = runTest(dispatcher) {
-        val viewModel = SearchViewModel(MedicationSearchRepository(FakeCimaApiService()), FakeScheduleRepository())
+        val viewModel = SearchViewModel(
+            MedicationSearchRepository(FakeCimaApiService()),
+            FakeScheduleRepository(),
+            FakeMedicationHistoryRepository(),
+        )
 
         assertEquals(SearchUiState.Idle, viewModel.uiState.value)
     }
@@ -49,6 +54,7 @@ class SearchViewModelTest {
         val viewModel = SearchViewModel(
             MedicationSearchRepository(FakeCimaApiService(medicamentosResponse = response)),
             FakeScheduleRepository(),
+            FakeMedicationHistoryRepository(),
         )
         val collectorJob = launch { viewModel.uiState.collect {} }
 
@@ -68,6 +74,7 @@ class SearchViewModelTest {
         val viewModel = SearchViewModel(
             MedicationSearchRepository(FakeCimaApiService(medicamentosResponse = response)),
             FakeScheduleRepository(),
+            FakeMedicationHistoryRepository(),
         )
         val collectorJob = launch { viewModel.uiState.collect {} }
 
@@ -85,6 +92,7 @@ class SearchViewModelTest {
         val viewModel = SearchViewModel(
             MedicationSearchRepository(FakeCimaApiService(medicamentosResponse = response)),
             FakeScheduleRepository(),
+            FakeMedicationHistoryRepository(),
         )
         val collectorJob = launch { viewModel.uiState.collect {} }
 
@@ -117,6 +125,7 @@ class SearchViewModelTest {
         val viewModel = SearchViewModel(
             MedicationSearchRepository(FakeCimaApiService(medicamentosResponse = response)),
             scheduleRepository,
+            FakeMedicationHistoryRepository(),
         )
         val collectorJob = launch { viewModel.uiState.collect {} }
 
@@ -137,6 +146,7 @@ class SearchViewModelTest {
         val viewModel = SearchViewModel(
             MedicationSearchRepository(FakeCimaApiService(medicamentosResponse = response)),
             FakeScheduleRepository(),
+            FakeMedicationHistoryRepository(),
         )
         val collectorJob = launch { viewModel.uiState.collect {} }
 
@@ -147,6 +157,57 @@ class SearchViewModelTest {
         val state = viewModel.uiState.value
         assertTrue(state is SearchUiState.Success)
         assertTrue((state as SearchUiState.Success).savedNregistros.isEmpty())
+        collectorJob.cancel()
+    }
+
+    @Test
+    fun `medications already in the history are flagged in the results`() = runTest(dispatcher) {
+        val dto = MedicamentoDto(nregistro = "1", nombre = "XAZAL")
+        val response = MedicamentosResponseDto(totalFilas = 1, pagina = 1, tamanioPagina = 25, resultados = listOf(dto))
+        val historyRepository = FakeMedicationHistoryRepository()
+        historyRepository.add(
+            nregistro = "1",
+            nombreMedicamento = "XAZAL",
+            reasonId = "r1",
+            reasonNombre = "Alergia",
+            dosisSnapshot = null,
+            fotoUrl = null,
+        )
+        val viewModel = SearchViewModel(
+            MedicationSearchRepository(FakeCimaApiService(medicamentosResponse = response)),
+            FakeScheduleRepository(),
+            historyRepository,
+        )
+        val collectorJob = launch { viewModel.uiState.collect {} }
+
+        viewModel.onQueryChanged("xazal")
+        advanceTimeBy(400)
+        runCurrent()
+
+        val state = viewModel.uiState.value
+        assertTrue(state is SearchUiState.Success)
+        assertTrue((state as SearchUiState.Success).historyNregistros.contains("1"))
+        collectorJob.cancel()
+    }
+
+    @Test
+    fun `medications not in the history are not flagged`() = runTest(dispatcher) {
+        val dto = MedicamentoDto(nregistro = "1", nombre = "XAZAL")
+        val response = MedicamentosResponseDto(totalFilas = 1, pagina = 1, tamanioPagina = 25, resultados = listOf(dto))
+        val viewModel = SearchViewModel(
+            MedicationSearchRepository(FakeCimaApiService(medicamentosResponse = response)),
+            FakeScheduleRepository(),
+            FakeMedicationHistoryRepository(),
+        )
+        val collectorJob = launch { viewModel.uiState.collect {} }
+
+        viewModel.onQueryChanged("xazal")
+        advanceTimeBy(400)
+        runCurrent()
+
+        val state = viewModel.uiState.value
+        assertTrue(state is SearchUiState.Success)
+        assertTrue((state as SearchUiState.Success).historyNregistros.isEmpty())
         collectorJob.cancel()
     }
 
@@ -169,6 +230,7 @@ class SearchViewModelTest {
         val viewModel = SearchViewModel(
             MedicationSearchRepository(FakeCimaApiService(medicamentosResponse = response)),
             scheduleRepository,
+            FakeMedicationHistoryRepository(),
         )
         val collectorJob = launch { viewModel.uiState.collect {} }
 

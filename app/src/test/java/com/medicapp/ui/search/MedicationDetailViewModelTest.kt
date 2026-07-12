@@ -6,6 +6,7 @@ import com.medicapp.data.remote.dto.AtcDto
 import com.medicapp.data.remote.dto.MedicamentoDetailDto
 import com.medicapp.data.remote.dto.PrincipioActivoDto
 import com.medicapp.data.repository.FakeAllergyRepository
+import com.medicapp.data.repository.FakeMedicationHistoryRepository
 import com.medicapp.data.repository.MedicationCatalogRepository
 import com.medicapp.model.Allergy
 import com.medicapp.model.AllergyType
@@ -45,9 +46,13 @@ class MedicationDetailViewModelTest {
         Dispatchers.resetMain()
     }
 
-    private fun createViewModel(allergyRepository: FakeAllergyRepository) = MedicationDetailViewModel(
+    private fun createViewModel(
+        allergyRepository: FakeAllergyRepository,
+        historyRepository: FakeMedicationHistoryRepository = FakeMedicationHistoryRepository(),
+    ) = MedicationDetailViewModel(
         MedicationCatalogRepository(FakeCimaApiService(medicamentoDetailResponse = detailDto)),
         allergyRepository,
+        historyRepository,
         SavedStateHandle(mapOf("nregistro" to "77758")),
     )
 
@@ -138,6 +143,49 @@ class MedicationDetailViewModelTest {
         viewModel.toggleIngredientAllergy(ingredient)
         advanceUntilIdle()
         assertTrue(viewModel.uiState.value.canAddToHistory)
+    }
+
+    @Test
+    fun `a medication already in the history is flagged with its reasons`() = runTest(dispatcher) {
+        val historyRepository = FakeMedicationHistoryRepository()
+        historyRepository.add(
+            nregistro = "77758",
+            nombreMedicamento = "PARACETAMOL ABAMED 1G",
+            reasonId = "r1",
+            reasonNombre = "Fiebre",
+            dosisSnapshot = null,
+            fotoUrl = null,
+        )
+        val viewModel = createViewModel(FakeAllergyRepository(), historyRepository)
+        advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.isInHistory)
+        assertEquals(listOf("Fiebre"), viewModel.uiState.value.historyReasons)
+    }
+
+    @Test
+    fun `a medication that is not in the history is not flagged`() = runTest(dispatcher) {
+        val viewModel = createViewModel(FakeAllergyRepository())
+        advanceUntilIdle()
+
+        assertFalse(viewModel.uiState.value.isInHistory)
+    }
+
+    @Test
+    fun `entries of other medications do not flag this one`() = runTest(dispatcher) {
+        val historyRepository = FakeMedicationHistoryRepository()
+        historyRepository.add(
+            nregistro = "99999",
+            nombreMedicamento = "IBUPROFENO",
+            reasonId = "r1",
+            reasonNombre = "Fiebre",
+            dosisSnapshot = null,
+            fotoUrl = null,
+        )
+        val viewModel = createViewModel(FakeAllergyRepository(), historyRepository)
+        advanceUntilIdle()
+
+        assertFalse(viewModel.uiState.value.isInHistory)
     }
 
     @Test

@@ -12,9 +12,11 @@ import com.medicapp.data.remote.dto.AtcDto
 import com.medicapp.data.remote.dto.MedicamentoDetailDto
 import com.medicapp.data.remote.dto.PrincipioActivoDto
 import com.medicapp.data.repository.FakeAllergyRepository
+import com.medicapp.data.repository.FakeMedicationHistoryRepository
 import com.medicapp.data.repository.MedicationCatalogRepository
 import com.medicapp.model.Allergy
 import com.medicapp.model.AllergyType
+import com.medicapp.model.TakenEntry
 import com.medicapp.ui.theme.MedicAppTheme
 import org.junit.Rule
 import org.junit.Test
@@ -33,10 +35,14 @@ class MedicationDetailScreenTest {
         atcs = listOf(AtcDto(codigo = "N02BE01", nombre = "Paracetamol")),
     )
 
-    private fun setContent(allergies: List<Allergy>) {
+    private fun setContent(
+        allergies: List<Allergy>,
+        history: FakeMedicationHistoryRepository = FakeMedicationHistoryRepository(),
+    ) {
         val viewModel = MedicationDetailViewModel(
             MedicationCatalogRepository(FakeCimaApiService(medicamentoDetailResponse = detailDto)),
             FakeAllergyRepository(allergies),
+            history,
             SavedStateHandle(mapOf("nregistro" to "77758")),
         )
         composeRule.setContent {
@@ -82,6 +88,35 @@ class MedicationDetailScreenTest {
         )
 
         composeRule.onNodeWithText("Añadir al historial").assertIsNotEnabled()
+    }
+
+    @Test
+    fun aMedicationAlreadyInTheHistoryShowsTheAddedBadge() {
+        val history = FakeMedicationHistoryRepository(
+            listOf(
+                TakenEntry(
+                    id = "entry-1",
+                    nregistro = "77758",
+                    nombreMedicamento = "PARACETAMOL ABAMED 1G",
+                    reasonId = "r1",
+                    reasonNombre = "Fiebre",
+                    timestampMillis = 0L,
+                    dosisSnapshot = null,
+                    fotoUrl = null,
+                ),
+            ),
+        )
+        setContent(allergies = emptyList(), history = history)
+
+        composeRule.onNodeWithText("Ya en tu historial").assertExists()
+        composeRule.onNodeWithText("Motivos registrados: Fiebre").assertExists()
+    }
+
+    @Test
+    fun aMedicationOutsideTheHistoryDoesNotShowTheAddedBadge() {
+        setContent(emptyList())
+
+        composeRule.onNodeWithText("Ya en tu historial").assertDoesNotExist()
     }
 
     @Test

@@ -37,6 +37,7 @@ import com.medicapp.model.Allergy
 import com.medicapp.model.AllergyType
 import com.medicapp.model.AtcCode
 import com.medicapp.model.PrincipioActivo
+import com.medicapp.ui.components.AddedChip
 import com.medicapp.ui.components.SearchHelpButton
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -231,7 +232,7 @@ private fun IngredientResultRow(item: PrincipioActivo, alreadyAdded: Boolean, on
         ) {
             Text(item.nombre, style = MaterialTheme.typography.bodyLarge)
             if (alreadyAdded) {
-                Text("Ya añadida", style = MaterialTheme.typography.labelMedium)
+                AddedChip("Ya añadida")
             } else {
                 Icon(Icons.Default.Add, contentDescription = "Añadir alergia")
             }
@@ -257,7 +258,7 @@ private fun FamilyResultRow(item: AtcCode, alreadyAdded: Boolean, onAdd: () -> U
                 Text(item.codigo, style = MaterialTheme.typography.bodySmall)
             }
             if (alreadyAdded) {
-                Text("Ya añadida", style = MaterialTheme.typography.labelMedium)
+                AddedChip("Ya añadida")
             } else {
                 Icon(Icons.Default.Add, contentDescription = "Añadir alergia")
             }

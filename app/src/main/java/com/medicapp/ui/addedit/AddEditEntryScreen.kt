@@ -1,6 +1,7 @@
 package com.medicapp.ui.addedit
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -15,11 +16,13 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.medicapp.model.Reason
+import com.medicapp.ui.components.AddedChip
 
 @Composable
 fun AddEditEntryScreen(
@@ -64,7 +67,12 @@ fun AddEditEntryScreen(
         if (uiState.suggestions.isNotEmpty()) {
             Column(modifier = Modifier.padding(top = 8.dp)) {
                 uiState.suggestions.forEach { reason ->
-                    ReasonSuggestionRow(reason = reason, onClick = { viewModel.onSuggestionSelected(reason) })
+                    val alreadyAdded = uiState.existingReasonNombres.any { it.equals(reason.nombre, true) }
+                    ReasonSuggestionRow(
+                        reason = reason,
+                        alreadyAdded = alreadyAdded,
+                        onClick = { viewModel.onSuggestionSelected(reason) },
+                    )
                 }
             }
         }
@@ -81,13 +89,22 @@ fun AddEditEntryScreen(
 }
 
 @Composable
-private fun ReasonSuggestionRow(reason: Reason, onClick: () -> Unit) {
+private fun ReasonSuggestionRow(reason: Reason, alreadyAdded: Boolean, onClick: () -> Unit) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 2.dp)
-            .clickable(onClick = onClick),
+            .clickable(enabled = !alreadyAdded, onClick = onClick),
     ) {
-        Text(reason.nombre, modifier = Modifier.padding(12.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(reason.nombre)
+            if (alreadyAdded) {
+                AddedChip("Ya añadido")
+            }
+        }
     }
 }

@@ -9,7 +9,10 @@ sealed interface SearchUiState {
     data class Success(
         val results: List<Medication>,
         val totalFilas: Int,
+        /** Medicamentos con un recordatorio activo. */
         val savedNregistros: Set<String> = emptySet(),
+        /** Medicamentos que ya están en el historial. */
+        val historyNregistros: Set<String> = emptySet(),
     ) : SearchUiState
     data class Error(val message: String) : SearchUiState
 }

@@ -34,6 +34,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.medicapp.model.AllergyType
 import com.medicapp.model.MedicationDetail
+import com.medicapp.ui.components.AddedChip
 import com.medicapp.ui.components.MedicationThumbnail
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -85,6 +86,15 @@ fun MedicationDetailScreen(
                             medication.labtitular?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
                             medication.dosis?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
                         }
+                    }
+
+                    if (uiState.isInHistory) {
+                        AddedChip("Ya en tu historial", modifier = Modifier.padding(top = 12.dp))
+                        Text(
+                            "Motivos registrados: ${uiState.historyReasons.joinToString()}",
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.padding(top = 4.dp),
+                        )
                     }
 
                     if (uiState.matches.isNotEmpty()) {

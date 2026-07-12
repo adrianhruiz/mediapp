@@ -24,6 +24,10 @@ class FakeMedicationHistoryRepository(
         entries.filter { it.nregistro == nregistro }
     }
 
+    override fun getMedicationNregistros(): Flow<Set<String>> = entriesFlow.map { entries ->
+        entries.map { it.nregistro }.toSet()
+    }
+
     override suspend fun getById(id: String): TakenEntry? = entriesFlow.value.firstOrNull { it.id == id }
 
     override suspend fun add(
