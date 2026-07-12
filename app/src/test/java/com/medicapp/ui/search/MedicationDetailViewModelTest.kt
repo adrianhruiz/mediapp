@@ -7,6 +7,8 @@ import com.medicapp.data.remote.dto.MedicamentoDetailDto
 import com.medicapp.data.remote.dto.PrincipioActivoDto
 import com.medicapp.data.repository.FakeAllergyRepository
 import com.medicapp.data.repository.MedicationCatalogRepository
+import com.medicapp.model.Allergy
+import com.medicapp.model.AllergyType
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -16,6 +18,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -81,6 +84,60 @@ class MedicationDetailViewModelTest {
         advanceUntilIdle()
 
         assertTrue(viewModel.uiState.value.matches.isEmpty())
+    }
+
+    @Test
+    fun `a medication without allergy matches can be added to the history`() = runTest(dispatcher) {
+        val viewModel = createViewModel(FakeAllergyRepository())
+        advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.canAddToHistory)
+    }
+
+    @Test
+    fun `a medication matching an ingredient allergy cannot be added to the history`() = runTest(dispatcher) {
+        val viewModel = createViewModel(
+            FakeAllergyRepository(
+                listOf(
+                    Allergy(
+                        id = "1",
+                        tipo = AllergyType.PRINCIPIO_ACTIVO,
+                        principioActivoId = 745,
+                        principioActivoNombre = "PARACETAMOL",
+                    ),
+                ),
+            ),
+        )
+        advanceUntilIdle()
+
+        assertFalse(viewModel.uiState.value.canAddToHistory)
+    }
+
+    @Test
+    fun `a medication matching a family allergy cannot be added to the history`() = runTest(dispatcher) {
+        val viewModel = createViewModel(
+            FakeAllergyRepository(
+                listOf(Allergy(id = "1", tipo = AllergyType.FAMILIA, atcCodigo = "N02B", atcNombre = "Analgésicos")),
+            ),
+        )
+        advanceUntilIdle()
+
+        assertFalse(viewModel.uiState.value.canAddToHistory)
+    }
+
+    @Test
+    fun `removing the allergy re-enables adding the medication to the history`() = runTest(dispatcher) {
+        val viewModel = createViewModel(FakeAllergyRepository())
+        advanceUntilIdle()
+        val ingredient = viewModel.uiState.value.medication!!.principiosActivos.first()
+
+        viewModel.toggleIngredientAllergy(ingredient)
+        advanceUntilIdle()
+        assertFalse(viewModel.uiState.value.canAddToHistory)
+
+        viewModel.toggleIngredientAllergy(ingredient)
+        advanceUntilIdle()
+        assertTrue(viewModel.uiState.value.canAddToHistory)
     }
 
     @Test

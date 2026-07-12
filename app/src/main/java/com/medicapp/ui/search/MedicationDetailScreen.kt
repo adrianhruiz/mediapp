@@ -159,9 +159,18 @@ fun MedicationDetailScreen(
 
                     Button(
                         onClick = { onAddToHistory(medication) },
+                        enabled = uiState.canAddToHistory,
                         modifier = Modifier.fillMaxWidth().padding(top = 24.dp),
                     ) {
                         Text("Añadir al historial")
+                    }
+                    if (!uiState.canAddToHistory) {
+                        Text(
+                            "No puedes añadirlo al historial: está desrecomendado por tus alergias.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                        )
                     }
                     OutlinedButton(
                         onClick = { onCreateReminder(medication) },
