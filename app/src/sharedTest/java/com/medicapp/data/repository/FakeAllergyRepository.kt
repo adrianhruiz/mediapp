@@ -17,6 +17,10 @@ class FakeAllergyRepository(
     override fun getAll(): Flow<List<Allergy>> = allergiesFlow
 
     override suspend fun addPrincipioActivo(id: Int, nombre: String) {
+        val exists = allergiesFlow.value.any {
+            it.tipo == AllergyType.PRINCIPIO_ACTIVO && it.principioActivoId == id
+        }
+        if (exists) return
         allergiesFlow.value = allergiesFlow.value + Allergy(
             id = "allergy-${nextId++}",
             tipo = AllergyType.PRINCIPIO_ACTIVO,
@@ -26,6 +30,8 @@ class FakeAllergyRepository(
     }
 
     override suspend fun addFamilia(atcCodigo: String, atcNombre: String) {
+        val exists = allergiesFlow.value.any { it.tipo == AllergyType.FAMILIA && it.atcCodigo == atcCodigo }
+        if (exists) return
         allergiesFlow.value = allergiesFlow.value + Allergy(
             id = "allergy-${nextId++}",
             tipo = AllergyType.FAMILIA,

@@ -7,8 +7,12 @@ interface MedicationHistoryRepository {
 
     fun getPage(limit: Long): Flow<PagedResult<TakenEntry>>
 
+    /** Entradas del historial de un medicamento concreto, para detectar duplicados. */
+    fun getByMedication(nregistro: String): Flow<List<TakenEntry>>
+
     suspend fun getById(id: String): TakenEntry?
 
+    /** Añade la entrada, salvo que ya exista una del mismo medicamento con el mismo motivo. */
     suspend fun add(
         nregistro: String,
         nombreMedicamento: String,

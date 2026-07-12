@@ -15,6 +15,8 @@ import com.medicapp.model.TakenEntry
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -25,7 +27,15 @@ data class AddEditUiState(
     val isEditMode: Boolean = false,
     val isSaved: Boolean = false,
     val isLoading: Boolean = true,
-)
+    /** Motivos con los que este medicamento ya está en el historial, sin contar la entrada en edición. */
+    val existingReasonNombres: List<String> = emptyList(),
+) {
+    /** El mismo medicamento con el mismo motivo ya está en el historial. */
+    val isDuplicate: Boolean
+        get() = existingReasonNombres.any { it.equals(reasonInput.trim(), ignoreCase = true) }
+
+    val canSave: Boolean get() = reasonInput.isNotBlank() && !isDuplicate
+}
 
 private const val MAX_SUGGESTIONS = 5
 
@@ -65,6 +75,7 @@ class AddEditEntryViewModel(
                         isLoading = false,
                     )
                 }
+                entry?.let { observeExistingEntries(it.nregistro) }
             }
         } else {
             _uiState.update {
@@ -74,7 +85,17 @@ class AddEditEntryViewModel(
                     isLoading = false,
                 )
             }
+            nregistroArg?.let { observeExistingEntries(it) }
         }
+    }
+
+    private fun observeExistingEntries(nregistro: String) {
+        historyRepository.getByMedication(nregistro)
+            .onEach { entries ->
+                val reasons = entries.filter { it.id != entryIdArg }.map { it.reasonNombre }
+                _uiState.update { it.copy(existingReasonNombres = reasons) }
+            }
+            .launchIn(viewModelScope)
     }
 
     private fun recomputeSuggestions() {
@@ -98,7 +119,7 @@ class AddEditEntryViewModel(
 
     fun save() {
         val state = _uiState.value
-        if (state.reasonInput.isBlank()) return
+        if (!state.canSave) return
         viewModelScope.launch {
             val reason = reasonRepository.findOrCreate(state.reasonInput)
             val entry = originalEntry

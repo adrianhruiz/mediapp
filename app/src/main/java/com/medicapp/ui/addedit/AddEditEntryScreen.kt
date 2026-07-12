@@ -51,6 +51,12 @@ fun AddEditEntryScreen(
             value = uiState.reasonInput,
             onValueChange = viewModel::onReasonInputChanged,
             label = { Text("Motivo (ej. dolor de cabeza)") },
+            isError = uiState.isDuplicate,
+            supportingText = if (uiState.isDuplicate) {
+                { Text("Ya tienes este medicamento en el historial con ese motivo.") }
+            } else {
+                null
+            },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
         )
@@ -67,7 +73,7 @@ fun AddEditEntryScreen(
             OutlinedButton(onClick = onCancel, modifier = Modifier.padding(end = 8.dp)) {
                 Text("Cancelar")
             }
-            Button(onClick = viewModel::save, enabled = uiState.reasonInput.isNotBlank()) {
+            Button(onClick = viewModel::save, enabled = uiState.canSave) {
                 Text("Guardar")
             }
         }

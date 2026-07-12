@@ -42,6 +42,20 @@ class FirestoreMedicationHistoryRepository(
         awaitClose { registration.remove() }
     }
 
+    override fun getByMedication(nregistro: String): Flow<List<TakenEntry>> = callbackFlow {
+        val registration = collection()
+            .whereEqualTo("nregistro", nregistro)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    Log.w("MedicationHistoryRepository", "Medication entries listener failed", error)
+                    trySend(emptyList())
+                    return@addSnapshotListener
+                }
+                trySend(snapshot?.documents.orEmpty().mapNotNull { it.toTakenEntry() })
+            }
+        awaitClose { registration.remove() }
+    }
+
     override suspend fun getById(id: String): TakenEntry? =
         collection().document(id).get().await().toTakenEntry()
 
@@ -53,6 +67,16 @@ class FirestoreMedicationHistoryRepository(
         dosisSnapshot: String?,
         fotoUrl: String?,
     ): String {
+        val duplicate = collection()
+            .whereEqualTo("nregistro", nregistro)
+            .whereEqualTo("reasonId", reasonId)
+            .limit(1)
+            .get()
+            .await()
+            .documents
+            .firstOrNull()
+        if (duplicate != null) return duplicate.id
+
         val ref = collection().add(
             mapOf(
                 "nregistro" to nregistro,

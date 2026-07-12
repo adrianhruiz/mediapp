@@ -33,6 +33,7 @@ class FirestoreAllergyRepository(
     }
 
     override suspend fun addPrincipioActivo(id: Int, nombre: String) {
+        if (exists("principioActivoId", id, AllergyType.PRINCIPIO_ACTIVO)) return
         collection().add(
             mapOf(
                 "tipo" to AllergyType.PRINCIPIO_ACTIVO.name,
@@ -44,6 +45,7 @@ class FirestoreAllergyRepository(
     }
 
     override suspend fun addFamilia(atcCodigo: String, atcNombre: String) {
+        if (exists("atcCodigo", atcCodigo, AllergyType.FAMILIA)) return
         collection().add(
             mapOf(
                 "tipo" to AllergyType.FAMILIA.name,
@@ -53,6 +55,17 @@ class FirestoreAllergyRepository(
             ),
         ).await()
     }
+
+    /** La misma alergia no puede guardarse dos veces, aunque se pulse repetidamente. */
+    private suspend fun exists(field: String, value: Any, tipo: AllergyType): Boolean =
+        collection()
+            .whereEqualTo("tipo", tipo.name)
+            .whereEqualTo(field, value)
+            .limit(1)
+            .get()
+            .await()
+            .isEmpty
+            .not()
 
     override suspend fun delete(allergyId: String) {
         collection().document(allergyId).delete().await()
