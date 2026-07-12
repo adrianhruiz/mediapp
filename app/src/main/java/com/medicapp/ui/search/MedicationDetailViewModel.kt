@@ -31,7 +31,10 @@ data class MedicationDetailUiState(
     val allergies: List<Allergy> = emptyList(),
     val matches: List<AllergyMatch> = emptyList(),
     val errorMessage: String? = null,
-)
+) {
+    /** Un medicamento desrecomendado por alergia no puede añadirse al historial. */
+    val canAddToHistory: Boolean get() = medication != null && matches.isEmpty()
+}
 
 class MedicationDetailViewModel(
     private val catalogRepository: MedicationCatalogRepository,
