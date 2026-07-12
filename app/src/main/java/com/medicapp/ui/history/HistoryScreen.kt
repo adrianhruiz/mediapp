@@ -1,5 +1,6 @@
 package com.medicapp.ui.history
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -36,6 +37,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -53,6 +56,7 @@ import java.time.format.DateTimeFormatter
 fun HistoryScreen(
     contentPadding: PaddingValues,
     onEditEntry: (TakenEntry) -> Unit,
+    onOpenMedication: (TakenEntry) -> Unit,
     viewModel: HistoryViewModel = viewModel(factory = HistoryViewModel.Factory),
 ) {
     val entries by viewModel.entries.collectAsStateWithLifecycle()
@@ -130,6 +134,7 @@ fun HistoryScreen(
                 items(entries, key = { it.id }) { entry ->
                     HistoryEntryCard(
                         entry = entry,
+                        onOpen = { onOpenMedication(entry) },
                         onEdit = { onEditEntry(entry) },
                         onDelete = { entryPendingDelete = entry },
                     )
@@ -166,8 +171,18 @@ fun HistoryScreen(
 private val formatter = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm")
 
 @Composable
-private fun HistoryEntryCard(entry: TakenEntry, onEdit: () -> Unit, onDelete: () -> Unit) {
-    Card(modifier = Modifier.fillMaxWidth()) {
+private fun HistoryEntryCard(
+    entry: TakenEntry,
+    onOpen: () -> Unit,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(enabled = entry.nregistro.isNotBlank(), onClick = onOpen)
+            .semantics { contentDescription = "Ver ficha de ${entry.nombreMedicamento}" },
+    ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
