@@ -28,7 +28,8 @@ class NetworkModule(context: Context) {
 
     private val cache = Cache(File(appContext.cacheDir, CACHE_DIR_NAME), CACHE_SIZE_BYTES)
 
-    private val okHttpClient: OkHttpClient = OkHttpClient.Builder()
+    /** Compartido con Coil para no levantar un segundo pool de conexiones ni otra caché. */
+    val okHttpClient: OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(15, TimeUnit.SECONDS)
         .cache(cache)

@@ -15,10 +15,13 @@ import com.medicapp.data.repository.MedicationHistoryRepository
 import com.medicapp.data.repository.MedicationSearchRepository
 import com.medicapp.data.repository.ReasonRepository
 import com.medicapp.data.repository.ScheduleRepository
+import okhttp3.OkHttpClient
 
 class AppContainer(context: Context) {
 
     private val networkModule = NetworkModule(context)
+
+    val okHttpClient: OkHttpClient get() = networkModule.okHttpClient
 
     val authRepository: AuthRepository =
         FirebaseAuthRepository(FirebaseModule.auth, FirebaseModule.firestore)

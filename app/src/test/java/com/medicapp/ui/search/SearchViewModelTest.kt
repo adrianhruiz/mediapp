@@ -128,15 +128,16 @@ class SearchViewModelTest {
             FakeMedicationHistoryRepository(),
         )
         val collectorJob = launch { viewModel.uiState.collect {} }
+        val savedJob = launch { viewModel.savedNregistros.collect {} }
 
         viewModel.onQueryChanged("xazal")
         advanceTimeBy(400)
         runCurrent()
 
-        val state = viewModel.uiState.value
-        assertTrue(state is SearchUiState.Success)
-        assertTrue((state as SearchUiState.Success).savedNregistros.contains("1"))
+        assertTrue(viewModel.uiState.value is SearchUiState.Success)
+        assertTrue(viewModel.savedNregistros.value.contains("1"))
         collectorJob.cancel()
+        savedJob.cancel()
     }
 
     @Test
@@ -149,15 +150,16 @@ class SearchViewModelTest {
             FakeMedicationHistoryRepository(),
         )
         val collectorJob = launch { viewModel.uiState.collect {} }
+        val savedJob = launch { viewModel.savedNregistros.collect {} }
 
         viewModel.onQueryChanged("xazal")
         advanceTimeBy(400)
         runCurrent()
 
-        val state = viewModel.uiState.value
-        assertTrue(state is SearchUiState.Success)
-        assertTrue((state as SearchUiState.Success).savedNregistros.isEmpty())
+        assertTrue(viewModel.uiState.value is SearchUiState.Success)
+        assertTrue(viewModel.savedNregistros.value.isEmpty())
         collectorJob.cancel()
+        savedJob.cancel()
     }
 
     @Test
@@ -179,15 +181,16 @@ class SearchViewModelTest {
             historyRepository,
         )
         val collectorJob = launch { viewModel.uiState.collect {} }
+        val historyJob = launch { viewModel.historyNregistros.collect {} }
 
         viewModel.onQueryChanged("xazal")
         advanceTimeBy(400)
         runCurrent()
 
-        val state = viewModel.uiState.value
-        assertTrue(state is SearchUiState.Success)
-        assertTrue((state as SearchUiState.Success).historyNregistros.contains("1"))
+        assertTrue(viewModel.uiState.value is SearchUiState.Success)
+        assertTrue(viewModel.historyNregistros.value.contains("1"))
         collectorJob.cancel()
+        historyJob.cancel()
     }
 
     @Test
@@ -200,15 +203,16 @@ class SearchViewModelTest {
             FakeMedicationHistoryRepository(),
         )
         val collectorJob = launch { viewModel.uiState.collect {} }
+        val historyJob = launch { viewModel.historyNregistros.collect {} }
 
         viewModel.onQueryChanged("xazal")
         advanceTimeBy(400)
         runCurrent()
 
-        val state = viewModel.uiState.value
-        assertTrue(state is SearchUiState.Success)
-        assertTrue((state as SearchUiState.Success).historyNregistros.isEmpty())
+        assertTrue(viewModel.uiState.value is SearchUiState.Success)
+        assertTrue(viewModel.historyNregistros.value.isEmpty())
         collectorJob.cancel()
+        historyJob.cancel()
     }
 
     @Test
@@ -233,14 +237,15 @@ class SearchViewModelTest {
             FakeMedicationHistoryRepository(),
         )
         val collectorJob = launch { viewModel.uiState.collect {} }
+        val savedJob = launch { viewModel.savedNregistros.collect {} }
 
         viewModel.onQueryChanged("xazal")
         advanceTimeBy(400)
         runCurrent()
 
-        val state = viewModel.uiState.value
-        assertTrue(state is SearchUiState.Success)
-        assertTrue((state as SearchUiState.Success).savedNregistros.isEmpty())
+        assertTrue(viewModel.uiState.value is SearchUiState.Success)
+        assertTrue(viewModel.savedNregistros.value.isEmpty())
         collectorJob.cancel()
+        savedJob.cancel()
     }
 }

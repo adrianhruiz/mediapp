@@ -194,9 +194,11 @@ private fun HistoryEntryCard(
             Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
                 Text(entry.nombreMedicamento, style = MaterialTheme.typography.titleMedium)
                 Text(entry.reasonNombre, style = MaterialTheme.typography.bodyMedium)
-                val formattedDate = Instant.ofEpochMilli(entry.timestampMillis)
-                    .atZone(ZoneId.systemDefault())
-                    .format(formatter)
+                val formattedDate = remember(entry.timestampMillis) {
+                    Instant.ofEpochMilli(entry.timestampMillis)
+                        .atZone(ZoneId.systemDefault())
+                        .format(formatter)
+                }
                 Text(formattedDate, style = MaterialTheme.typography.bodySmall)
             }
             Row {

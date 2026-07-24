@@ -139,8 +139,12 @@ fun CreateScheduleScreen(
             verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
             modifier = Modifier.padding(top = 8.dp),
         ) {
+            val timeFormatter = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
+            val formattedStartAt = remember(uiState.startAtMillis) {
+                timeFormatter.format(Date(uiState.startAtMillis))
+            }
             Text(
-                SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(uiState.startAtMillis)),
+                formattedStartAt,
                 style = MaterialTheme.typography.bodyLarge,
                 modifier = Modifier.padding(end = 12.dp),
             )

@@ -44,6 +44,8 @@ fun SearchScreen(
 ) {
     val query by viewModel.query.collectAsStateWithLifecycle()
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val savedNregistros by viewModel.savedNregistros.collectAsStateWithLifecycle()
+    val historyNregistros by viewModel.historyNregistros.collectAsStateWithLifecycle()
 
     Column(
         modifier = Modifier
@@ -90,8 +92,8 @@ fun SearchScreen(
                     items(state.results, key = { it.nregistro }) { medication ->
                         MedicationResultCard(
                             medication = medication,
-                            isSaved = medication.nregistro in state.savedNregistros,
-                            isInHistory = medication.nregistro in state.historyNregistros,
+                            isSaved = medication.nregistro in savedNregistros,
+                            isInHistory = medication.nregistro in historyNregistros,
                             onClick = { onOpenDetail(medication) },
                         )
                     }

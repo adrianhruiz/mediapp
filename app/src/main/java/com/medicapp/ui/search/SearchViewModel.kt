@@ -15,7 +15,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
@@ -32,14 +31,16 @@ class SearchViewModel(
     private val _query = MutableStateFlow("")
     val query: StateFlow<String> = _query.asStateFlow()
 
-    private val savedNregistros: StateFlow<Set<String>> = scheduleRepository.getActiveScheduleNregistros()
+    /** Medicamentos con un recordatorio activo. */
+    val savedNregistros: StateFlow<Set<String>> = scheduleRepository.getActiveScheduleNregistros()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptySet())
 
-    private val historyNregistros: StateFlow<Set<String>> = historyRepository.getMedicationNregistros()
+    /** Medicamentos que ya están en el historial. */
+    val historyNregistros: StateFlow<Set<String>> = historyRepository.getMedicationNregistros()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptySet())
 
     @OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
-    private val searchResult: StateFlow<SearchUiState> = _query
+    val uiState: StateFlow<SearchUiState> = _query
         .debounce(350)
         .distinctUntilChanged()
         .flatMapLatest { text ->
@@ -66,15 +67,6 @@ class SearchViewModel(
             }
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), SearchUiState.Idle)
-
-    val uiState: StateFlow<SearchUiState> =
-        combine(searchResult, savedNregistros, historyNregistros) { result, saved, inHistory ->
-            if (result is SearchUiState.Success) {
-                result.copy(savedNregistros = saved, historyNregistros = inHistory)
-            } else {
-                result
-            }
-        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), SearchUiState.Idle)
 
     fun onQueryChanged(newQuery: String) {
         _query.value = newQuery
