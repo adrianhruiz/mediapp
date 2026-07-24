@@ -6,6 +6,7 @@ import coil3.PlatformContext
 import coil3.SingletonImageLoader
 import coil3.network.okhttp.OkHttpNetworkFetcherFactory
 import coil3.request.crossfade
+import com.medicapp.data.backup.BackupWorker
 import com.medicapp.di.AppContainer
 import com.medicapp.notifications.NotificationChannels
 
@@ -18,6 +19,7 @@ class MedicApp : Application(), SingletonImageLoader.Factory {
         super.onCreate()
         container = AppContainer(applicationContext)
         NotificationChannels.create(this)
+        BackupWorker.schedule(this)
     }
 
     /**
