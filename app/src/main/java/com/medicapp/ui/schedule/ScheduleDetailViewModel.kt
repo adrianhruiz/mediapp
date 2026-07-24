@@ -19,7 +19,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.launchIn
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -41,8 +40,7 @@ class ScheduleDetailViewModel(
     val uiState: StateFlow<ScheduleDetailUiState> = _uiState.asStateFlow()
 
     init {
-        scheduleRepository.getSchedules()
-            .map { list -> list.firstOrNull { it.id == scheduleId } }
+        scheduleRepository.observeSchedule(scheduleId)
             .onEach { schedule -> _uiState.update { it.copy(schedule = schedule) } }
             .launchIn(viewModelScope)
 

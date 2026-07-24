@@ -16,8 +16,12 @@ class FakeMedicationHistoryRepository(
     val entries: List<TakenEntry> get() = entriesFlow.value
 
     override fun getPage(limit: Long): Flow<PagedResult<TakenEntry>> = entriesFlow.map { entries ->
-        val page = entries.take(limit.toInt())
-        PagedResult(items = page, hasMore = page.size.toLong() >= limit, isFromCache = false)
+        val loaded = entries.take(limit.toInt() + 1)
+        PagedResult(
+            items = loaded.take(limit.toInt()),
+            hasMore = loaded.size.toLong() > limit,
+            isFromCache = false,
+        )
     }
 
     override fun getByMedication(nregistro: String): Flow<List<TakenEntry>> = entriesFlow.map { entries ->

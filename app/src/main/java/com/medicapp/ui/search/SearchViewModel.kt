@@ -9,7 +9,6 @@ import com.medicapp.MedicApp
 import com.medicapp.data.repository.MedicationHistoryRepository
 import com.medicapp.data.repository.MedicationSearchRepository
 import com.medicapp.data.repository.ScheduleRepository
-import com.medicapp.model.ScheduleStatus
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -21,7 +20,6 @@ import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import java.io.IOException
 
@@ -34,10 +32,7 @@ class SearchViewModel(
     private val _query = MutableStateFlow("")
     val query: StateFlow<String> = _query.asStateFlow()
 
-    private val savedNregistros: StateFlow<Set<String>> = scheduleRepository.getSchedules()
-        .map { schedules ->
-            schedules.filter { it.status == ScheduleStatus.ACTIVE }.map { it.nregistro }.toSet()
-        }
+    private val savedNregistros: StateFlow<Set<String>> = scheduleRepository.getActiveScheduleNregistros()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptySet())
 
     private val historyNregistros: StateFlow<Set<String>> = historyRepository.getMedicationNregistros()

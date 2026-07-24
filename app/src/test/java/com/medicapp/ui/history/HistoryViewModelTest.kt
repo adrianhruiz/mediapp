@@ -129,6 +129,21 @@ class HistoryViewModelTest {
     }
 
     @Test
+    fun `hasMore is false when the total is an exact multiple of the page size`() = runTest(dispatcher) {
+        val entries = (1..20).map { entry("$it", "Medicamento $it", "r1", "Dolor de cabeza") }
+        val viewModel = HistoryViewModel(FakeMedicationHistoryRepository(entries), FakeReasonRepository())
+        val entriesJob = launch { viewModel.entries.collect {} }
+        val hasMoreJob = launch { viewModel.hasMore.collect {} }
+        runCurrent()
+
+        assertEquals(20, viewModel.entries.value.size)
+        assertFalse(viewModel.hasMore.value)
+
+        entriesJob.cancel()
+        hasMoreJob.cancel()
+    }
+
+    @Test
     fun `exposes the available reasons for the filter dropdown`() = runTest(dispatcher) {
         val reasonRepository = FakeReasonRepository(
             initialReasons = listOf(Reason(id = "r1", nombre = "Dolor de cabeza")),

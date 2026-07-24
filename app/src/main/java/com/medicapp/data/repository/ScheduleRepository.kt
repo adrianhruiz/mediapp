@@ -8,13 +8,20 @@ data class ScheduleWithDoses(val schedule: MedicationSchedule, val doses: List<M
 
 interface ScheduleRepository {
 
-    fun getSchedules(): Flow<List<MedicationSchedule>>
-
     fun getSchedulesPage(limit: Long): Flow<PagedResult<MedicationSchedule>>
+
+    /** Números de registro con pauta activa, para marcarlos como guardados en la búsqueda. */
+    fun getActiveScheduleNregistros(): Flow<Set<String>>
 
     fun getDoses(scheduleId: String): Flow<List<MedicationDose>>
 
+    /** Una única pauta en tiempo real, sin traerse el resto de la colección. */
+    fun observeSchedule(scheduleId: String): Flow<MedicationSchedule?>
+
     suspend fun getSchedule(scheduleId: String): MedicationSchedule?
+
+    /** Si ya hay una pauta activa para este medicamento, para avisar del duplicado. */
+    suspend fun hasActiveScheduleFor(nregistro: String): Boolean
 
     suspend fun getDose(scheduleId: String, doseId: String): MedicationDose?
 

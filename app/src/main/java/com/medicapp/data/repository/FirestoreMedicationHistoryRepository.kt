@@ -20,21 +20,26 @@ class FirestoreMedicationHistoryRepository(
         .document(authRepository.currentUserId ?: error("No hay sesión iniciada"))
         .collection("takenMedications")
 
+    /**
+     * Pide una fila de más que el límite pedido: si llega, es que hay página siguiente. Comparar
+     * `size >= limit` en su lugar deja un indicador de carga infinito cuando el total es múltiplo
+     * exacto del tamaño de página.
+     */
     override fun getPage(limit: Long): Flow<PagedResult<TakenEntry>> = callbackFlow {
         val registration = collection()
             .orderBy("timestamp", Query.Direction.DESCENDING)
-            .limit(limit)
+            .limit(limit + 1)
             .addSnapshotListener { snapshot, error ->
                 if (error != null) {
                     Log.w("MedicationHistoryRepository", "Taken medications listener failed", error)
                     trySend(PagedResult(emptyList(), hasMore = false, isFromCache = false))
                     return@addSnapshotListener
                 }
-                val items = snapshot?.documents.orEmpty().mapNotNull { it.toTakenEntry() }
+                val loaded = snapshot?.documents.orEmpty().mapNotNull { it.toTakenEntry() }
                 trySend(
                     PagedResult(
-                        items = items,
-                        hasMore = items.size.toLong() >= limit,
+                        items = loaded.take(limit.toInt()),
+                        hasMore = loaded.size > limit,
                         isFromCache = snapshot?.metadata?.isFromCache ?: false,
                     ),
                 )
