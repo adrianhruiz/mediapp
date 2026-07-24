@@ -17,11 +17,17 @@ import com.medicapp.data.repository.MedicationHistoryRepository
 import com.medicapp.data.repository.MedicationSearchRepository
 import com.medicapp.data.repository.ReasonRepository
 import com.medicapp.data.repository.ScheduleRepository
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import okhttp3.OkHttpClient
 
 class AppContainer(context: Context) {
 
     private val networkModule = NetworkModule(context)
+
+    /** Sostiene los listeners que se comparten entre pantallas; vive lo que viva la app. */
+    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     val okHttpClient: OkHttpClient get() = networkModule.okHttpClient
 
@@ -38,10 +44,10 @@ class AppContainer(context: Context) {
         FirestoreMedicationHistoryRepository(FirebaseModule.firestore, authRepository)
 
     val allergyRepository: AllergyRepository =
-        FirestoreAllergyRepository(FirebaseModule.firestore, authRepository)
+        FirestoreAllergyRepository(FirebaseModule.firestore, authRepository, appScope)
 
     val reasonRepository: ReasonRepository =
-        FirestoreReasonRepository(FirebaseModule.firestore, authRepository)
+        FirestoreReasonRepository(FirebaseModule.firestore, authRepository, appScope)
 
     val scheduleRepository: ScheduleRepository =
         FirestoreScheduleRepository(FirebaseModule.firestore, authRepository)

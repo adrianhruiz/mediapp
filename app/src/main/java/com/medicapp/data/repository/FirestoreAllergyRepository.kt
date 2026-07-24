@@ -6,6 +6,7 @@ import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.medicapp.model.Allergy
 import com.medicapp.model.AllergyType
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
@@ -14,23 +15,32 @@ import kotlinx.coroutines.tasks.await
 class FirestoreAllergyRepository(
     private val firestore: FirebaseFirestore,
     private val authRepository: AuthRepository,
+    scope: CoroutineScope,
 ) : AllergyRepository {
 
-    private fun collection() = firestore.collection("users")
-        .document(authRepository.currentUserId ?: error("No hay sesión iniciada"))
+    private fun collection() = collectionFor(authRepository.currentUserId ?: error("No hay sesión iniciada"))
+
+    private fun collectionFor(userId: String) = firestore.collection("users")
+        .document(userId)
         .collection("allergies")
 
-    override fun getAll(): Flow<List<Allergy>> = callbackFlow {
-        val registration = collection().addSnapshotListener { snapshot, error ->
-            if (error != null) {
-                Log.w("AllergyRepository", "Allergies listener failed", error)
-                trySend(emptyList())
-                return@addSnapshotListener
+    /** Lo miran a la vez la pantalla de alergias y la ficha de medicamento. */
+    private val allergies: Flow<List<Allergy>> =
+        authRepository.sharedPerSession(scope, emptyValue = emptyList()) { userId ->
+            callbackFlow {
+                val registration = collectionFor(userId).addSnapshotListener { snapshot, error ->
+                    if (error != null) {
+                        Log.w("AllergyRepository", "Allergies listener failed", error)
+                        trySend(emptyList())
+                        return@addSnapshotListener
+                    }
+                    trySend(snapshot?.documents.orEmpty().mapNotNull { it.toAllergy() })
+                }
+                awaitClose { registration.remove() }
             }
-            trySend(snapshot?.documents.orEmpty().mapNotNull { it.toAllergy() })
         }
-        awaitClose { registration.remove() }
-    }
+
+    override fun getAll(): Flow<List<Allergy>> = allergies
 
     override suspend fun addPrincipioActivo(id: Int, nombre: String) {
         if (exists("principioActivoId", id, AllergyType.PRINCIPIO_ACTIVO)) return
