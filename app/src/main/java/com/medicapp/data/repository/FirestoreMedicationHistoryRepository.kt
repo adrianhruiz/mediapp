@@ -4,6 +4,7 @@ import android.util.Log
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.MetadataChanges
 import com.google.firebase.firestore.Query
 import com.medicapp.model.TakenEntry
 import kotlinx.coroutines.channels.awaitClose
@@ -24,12 +25,17 @@ class FirestoreMedicationHistoryRepository(
      * Pide una fila de más que el límite pedido: si llega, es que hay página siguiente. Comparar
      * `size >= limit` en su lugar deja un indicador de carga infinito cuando el total es múltiplo
      * exacto del tamaño de página.
+     *
+     * Escucha con [MetadataChanges.INCLUDE] porque `isFromCache` **es** un metadato. Por defecto
+     * el listener solo avisa cuando cambian los datos, así que la confirmación del servidor —que
+     * es justo cuando `isFromCache` pasa a false— no llegaba nunca si los datos no habían
+     * cambiado, y el aviso de "sin conexión" se quedaba encendido para siempre.
      */
     override fun getPage(limit: Long): Flow<PagedResult<TakenEntry>> = callbackFlow {
         val registration = collection()
             .orderBy("timestamp", Query.Direction.DESCENDING)
             .limit(limit + 1)
-            .addSnapshotListener { snapshot, error ->
+            .addSnapshotListener(MetadataChanges.INCLUDE) { snapshot, error ->
                 if (error != null) {
                     Log.w("MedicationHistoryRepository", "Taken medications listener failed", error)
                     trySend(PagedResult(emptyList(), hasMore = false, isFromCache = false))
