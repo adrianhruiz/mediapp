@@ -6,7 +6,9 @@ import com.medicapp.data.remote.dto.MedicamentoDto
 import com.medicapp.data.remote.dto.MedicamentosResponseDto
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class MedicationSearchRepositoryTest {
@@ -31,6 +33,24 @@ class MedicationSearchRepositoryTest {
         assertEquals("12345", medication.nregistro)
         assertEquals("PARACETAMOL ABAMED 1G", medication.nombre)
         assertNull(medication.fotoUrl)
+    }
+
+    @Test
+    fun `flags results that came from the disk cache`() = runTest {
+        val response = MedicamentosResponseDto(1, 1, 25, listOf(MedicamentoDto(nregistro = "1", nombre = "X")))
+        val repository = MedicationSearchRepository(
+            FakeCimaApiService(medicamentosResponse = response, medicamentosFromCache = true),
+        )
+
+        assertTrue(repository.search("x").isFromCache)
+    }
+
+    @Test
+    fun `does not flag results that came from the network`() = runTest {
+        val response = MedicamentosResponseDto(1, 1, 25, listOf(MedicamentoDto(nregistro = "1", nombre = "X")))
+        val repository = MedicationSearchRepository(FakeCimaApiService(medicamentosResponse = response))
+
+        assertFalse(repository.search("x").isFromCache)
     }
 
     @Test

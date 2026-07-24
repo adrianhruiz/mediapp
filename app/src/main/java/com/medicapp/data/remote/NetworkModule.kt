@@ -37,6 +37,7 @@ class NetworkModule(context: Context) {
         .cache(cache)
         .addInterceptor(CircuitBreakerInterceptor(circuitBreaker, isOnline = ::isOnline))
         .addInterceptor(OfflineFallbackInterceptor(isOnline = ::isOnline))
+        .addInterceptor(CacheOriginInterceptor())
         .addNetworkInterceptor(CimaCacheInterceptor())
         .apply {
             if (BuildConfig.DEBUG) {

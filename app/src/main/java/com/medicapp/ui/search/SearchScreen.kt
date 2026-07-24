@@ -80,6 +80,13 @@ fun SearchScreen(
             is SearchUiState.Empty -> HintMessage("No se han encontrado medicamentos")
             is SearchUiState.Error -> HintMessage(state.message)
             is SearchUiState.Success -> {
+                if (state.isFromCache) {
+                    Text(
+                        "Sin acceso al buscador · mostrando resultados guardados",
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                    )
+                }
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     if (state.totalFilas > state.results.size) {
                         item {

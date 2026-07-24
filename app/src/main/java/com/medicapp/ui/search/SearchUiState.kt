@@ -17,6 +17,8 @@ sealed interface SearchUiState {
     data class Success(
         val results: List<Medication>,
         val totalFilas: Int,
+        /** Los resultados salieron de la caché: pueden estar desfasados. */
+        val isFromCache: Boolean = false,
     ) : SearchUiState
 
     data class Error(val message: String) : SearchUiState

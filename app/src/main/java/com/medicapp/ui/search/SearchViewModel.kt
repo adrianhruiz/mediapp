@@ -57,7 +57,11 @@ class SearchViewModel(
                         if (result.medications.isEmpty()) {
                             SearchUiState.Empty
                         } else {
-                            SearchUiState.Success(result.medications, result.totalFilas)
+                            SearchUiState.Success(
+                                results = result.medications,
+                                totalFilas = result.totalFilas,
+                                isFromCache = result.isFromCache,
+                            )
                         },
                     )
                 } catch (e: CimaUnavailableException) {
