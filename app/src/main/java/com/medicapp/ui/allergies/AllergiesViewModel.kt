@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.medicapp.MedicApp
+import com.medicapp.data.remote.CimaUnavailableException
 import com.medicapp.data.repository.AllergyRepository
 import com.medicapp.data.repository.MedicationCatalogRepository
 import com.medicapp.model.Allergy
@@ -86,6 +87,13 @@ class AllergiesViewModel(
                                 )
                             }
                         }
+                    } catch (e: CimaUnavailableException) {
+                        emit(
+                            CatalogSearchUiState.Error(
+                                "El catálogo de medicamentos no está disponible ahora mismo. " +
+                                    "Inténtalo de nuevo en unos minutos.",
+                            ),
+                        )
                     } catch (e: IOException) {
                         emit(CatalogSearchUiState.Error("No se pudo conectar. Comprueba tu conexión a internet."))
                     } catch (e: Exception) {

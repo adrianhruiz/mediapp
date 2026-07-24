@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.medicapp.MedicApp
+import com.medicapp.data.remote.CimaUnavailableException
 import com.medicapp.data.repository.MedicationHistoryRepository
 import com.medicapp.data.repository.MedicationSearchRepository
 import com.medicapp.data.repository.ScheduleRepository
@@ -58,6 +59,13 @@ class SearchViewModel(
                         } else {
                             SearchUiState.Success(result.medications, result.totalFilas)
                         },
+                    )
+                } catch (e: CimaUnavailableException) {
+                    emit(
+                        SearchUiState.Error(
+                            "El buscador de medicamentos no está disponible ahora mismo. " +
+                                "Inténtalo de nuevo en unos minutos.",
+                        ),
                     )
                 } catch (e: IOException) {
                     emit(SearchUiState.Error("No se pudo conectar. Comprueba tu conexión a internet."))

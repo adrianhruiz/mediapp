@@ -28,11 +28,14 @@ class NetworkModule(context: Context) {
 
     private val cache = Cache(File(appContext.cacheDir, CACHE_DIR_NAME), CACHE_SIZE_BYTES)
 
+    private val circuitBreaker = CimaCircuitBreaker()
+
     /** Compartido con Coil para no levantar un segundo pool de conexiones ni otra caché. */
     val okHttpClient: OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(15, TimeUnit.SECONDS)
         .cache(cache)
+        .addInterceptor(CircuitBreakerInterceptor(circuitBreaker, isOnline = ::isOnline))
         .addInterceptor(OfflineFallbackInterceptor(isOnline = ::isOnline))
         .addNetworkInterceptor(CimaCacheInterceptor())
         .apply {
