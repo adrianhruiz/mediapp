@@ -21,20 +21,7 @@ class BootRescheduleReceiver : BroadcastReceiver() {
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 if (app.container.authRepository.currentUserId == null) return@launch
-                val now = System.currentTimeMillis()
-                app.container.scheduleRepository.getActiveSchedulesWithPendingDoses().forEach { scheduleWithDoses ->
-                    scheduleWithDoses.doses
-                        .filter { it.scheduledAtMillis > now }
-                        .forEach { dose ->
-                            DoseAlarmScheduler.scheduleDose(
-                                appContext,
-                                scheduleWithDoses.schedule.id,
-                                dose,
-                                scheduleWithDoses.schedule.nombreMedicamento,
-                                scheduleWithDoses.schedule.totalDoses,
-                            )
-                        }
-                }
+                DoseRescheduler.rescheduleFutureDoses(appContext, app.container.scheduleRepository)
             } catch (e: Exception) {
                 Log.w("BootRescheduleReceiver", "Failed to reschedule doses after boot", e)
             } finally {
