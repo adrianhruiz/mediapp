@@ -2,10 +2,16 @@ package com.medicapp.data.remote
 
 import okhttp3.Interceptor
 import okhttp3.Response
+import java.io.IOException
 import java.util.concurrent.TimeUnit
+
+private const val HTTP_GATEWAY_TIMEOUT = 504
 
 /** Cuánto puede pasarse de su TTL una respuesta cacheada y aun así servirse. */
 internal val CIMA_MAX_STALE_SECONDS = TimeUnit.DAYS.toSeconds(7)
+
+/** No hay conexión y tampoco nada guardado con lo que salir del paso. */
+class OfflineWithoutCacheException : IOException("Sin conexión y sin datos guardados")
 
 /**
  * When offline, serves the last cached response instead of failing outright, as long as one
@@ -16,12 +22,21 @@ class OfflineFallbackInterceptor(
     private val isOnline: () -> Boolean,
 ) : Interceptor {
     override fun intercept(chain: Interceptor.Chain): Response {
-        var request = chain.request()
-        if (!isOnline()) {
-            request = request.newBuilder()
+        val request = chain.request()
+        if (isOnline()) return chain.proceed(request)
+
+        val response = chain.proceed(
+            request.newBuilder()
                 .header("Cache-Control", "only-if-cached, max-stale=$CIMA_MAX_STALE_SECONDS")
-                .build()
+                .build(),
+        )
+        // Al forzar only-if-cached, un 504 no viene del servidor: lo fabrica OkHttp cuando no
+        // hay nada guardado que servir. Devolverlo tal cual acababa como "error inesperado" en
+        // la pantalla, cuando lo que pasa es que no hay conexión.
+        if (response.code == HTTP_GATEWAY_TIMEOUT) {
+            response.close()
+            throw OfflineWithoutCacheException()
         }
-        return chain.proceed(request)
+        return response
     }
 }

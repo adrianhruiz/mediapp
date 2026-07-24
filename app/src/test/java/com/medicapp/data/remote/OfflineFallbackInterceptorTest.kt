@@ -7,6 +7,7 @@ import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertThrows
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -65,16 +66,31 @@ class OfflineFallbackInterceptorTest {
     }
 
     @Test
-    fun `returns 504 when offline and nothing is cached`() {
+    fun `fails as a connection problem when offline and nothing is cached`() {
         val client = buildClient()
         online = false
         val request = Request.Builder().url(server.url("/medicamento?nregistro=1")).build()
+
+        // El 504 que fabrica OkHttp al no encontrar nada en caché no debe llegar a las capas de
+        // arriba: allí se leería como un error del servidor y no como falta de conexión.
+        assertThrows(OfflineWithoutCacheException::class.java) {
+            client.newCall(request).execute()
+        }
+
+        assertEquals(0, server.requestCount)
+    }
+
+    @Test
+    fun `a real 504 from the server is left alone when online`() {
+        val client = buildClient()
+        val request = Request.Builder().url(server.url("/medicamento?nregistro=1")).build()
+        server.enqueue(MockResponse().setResponseCode(504))
 
         client.newCall(request).execute().use { response ->
             assertEquals(504, response.code)
         }
 
-        assertEquals(0, server.requestCount)
+        assertEquals(1, server.requestCount)
     }
 
     @Test
