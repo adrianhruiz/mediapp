@@ -12,6 +12,8 @@ class FakeCimaApiService(
     private val maestrasResponse: MaestrasResponseDto? = null,
     /** Simula que la búsqueda se ha servido desde la caché de disco. */
     private val medicamentosFromCache: Boolean = false,
+    /** Lo mismo para las consultas al catálogo (principios activos y familias). */
+    private val maestrasFromCache: Boolean = false,
 ) : CimaApiService {
 
     var lastBuscarMedicamentosNombre: String? = null
@@ -36,9 +38,15 @@ class FakeCimaApiService(
         return medicamentoDetailResponse ?: error("No medicamentoDetailResponse configured on FakeCimaApiService")
     }
 
-    override suspend fun obtenerMaestra(maestra: Int, nombre: String?): MaestrasResponseDto {
+    override suspend fun obtenerMaestra(maestra: Int, nombre: String?): Response<MaestrasResponseDto> {
         lastMaestraId = maestra
         lastMaestraNombre = nombre
-        return maestrasResponse ?: error("No maestrasResponse configured on FakeCimaApiService")
+        val body = maestrasResponse ?: error("No maestrasResponse configured on FakeCimaApiService")
+        val headers = if (maestrasFromCache) {
+            Headers.headersOf(HEADER_SERVED_FROM_CACHE, "true")
+        } else {
+            Headers.headersOf()
+        }
+        return Response.success(body, headers)
     }
 }

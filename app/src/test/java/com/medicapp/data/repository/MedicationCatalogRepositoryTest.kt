@@ -9,7 +9,9 @@ import com.medicapp.data.remote.dto.MedicamentoDetailDto
 import com.medicapp.data.remote.dto.PrincipioActivoDto
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class MedicationCatalogRepositoryTest {
@@ -60,8 +62,8 @@ class MedicationCatalogRepositoryTest {
 
         val result = repository.searchPrincipiosActivos("ibuprofeno")
 
-        assertEquals(1, result.size)
-        assertEquals("Ibuprofeno", result.first().nombre)
+        assertEquals(1, result.items.size)
+        assertEquals("Ibuprofeno", result.items.first().nombre)
         assertEquals(1, fake.lastMaestraId)
     }
 
@@ -81,9 +83,37 @@ class MedicationCatalogRepositoryTest {
 
         val result = repository.searchAtcCodes("penicilina")
 
-        assertEquals(1, result.size)
-        assertEquals("J01C", result.first().codigo)
+        assertEquals(1, result.items.size)
+        assertEquals("J01C", result.items.first().codigo)
         assertEquals(7, fake.lastMaestraId)
+    }
+
+    @Test
+    fun `flags catalog results that came from the disk cache`() = runTest {
+        val response = MaestrasResponseDto(
+            totalFilas = 1,
+            pagina = 1,
+            tamanioPagina = 200,
+            resultados = listOf(MaestraItemDto(id = 1, nombre = "Ibuprofeno")),
+        )
+        val repository = MedicationCatalogRepository(
+            FakeCimaApiService(maestrasResponse = response, maestrasFromCache = true),
+        )
+
+        assertTrue(repository.searchPrincipiosActivos("ibuprofeno").isFromCache)
+    }
+
+    @Test
+    fun `does not flag catalog results that came from the network`() = runTest {
+        val response = MaestrasResponseDto(
+            totalFilas = 1,
+            pagina = 1,
+            tamanioPagina = 200,
+            resultados = listOf(MaestraItemDto(id = 1, nombre = "Ibuprofeno")),
+        )
+        val repository = MedicationCatalogRepository(FakeCimaApiService(maestrasResponse = response))
+
+        assertFalse(repository.searchPrincipiosActivos("ibuprofeno").isFromCache)
     }
 
     @Test

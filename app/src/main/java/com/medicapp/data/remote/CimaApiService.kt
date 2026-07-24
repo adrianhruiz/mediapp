@@ -24,9 +24,10 @@ interface CimaApiService {
         @Query("nregistro") nregistro: String,
     ): MedicamentoDetailDto
 
+    /** Devuelve la respuesta completa por lo mismo que [buscarMedicamentos]. */
     @GET("maestras")
     suspend fun obtenerMaestra(
         @Query("maestra") maestra: Int,
         @Query("nombre") nombre: String? = null,
-    ): MaestrasResponseDto
+    ): Response<MaestrasResponseDto>
 }

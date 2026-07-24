@@ -35,8 +35,15 @@ sealed interface CatalogSearchUiState {
     data object Loading : CatalogSearchUiState
     data object Empty : CatalogSearchUiState
     data class Error(val message: String) : CatalogSearchUiState
-    data class IngredientResults(val items: List<PrincipioActivo>) : CatalogSearchUiState
-    data class FamilyResults(val items: List<AtcCode>) : CatalogSearchUiState
+    data class IngredientResults(
+        val items: List<PrincipioActivo>,
+        val isFromCache: Boolean = false,
+    ) : CatalogSearchUiState
+
+    data class FamilyResults(
+        val items: List<AtcCode>,
+        val isFromCache: Boolean = false,
+    ) : CatalogSearchUiState
 }
 
 class AllergiesViewModel(
@@ -67,22 +74,22 @@ class AllergiesViewModel(
                     try {
                         when (mode) {
                             AllergySearchMode.PRINCIPIO_ACTIVO -> {
-                                val results = catalogRepository.searchPrincipiosActivos(text)
+                                val result = catalogRepository.searchPrincipiosActivos(text)
                                 emit(
-                                    if (results.isEmpty()) {
+                                    if (result.items.isEmpty()) {
                                         CatalogSearchUiState.Empty
                                     } else {
-                                        CatalogSearchUiState.IngredientResults(results)
+                                        CatalogSearchUiState.IngredientResults(result.items, result.isFromCache)
                                     },
                                 )
                             }
                             AllergySearchMode.FAMILIA -> {
-                                val results = catalogRepository.searchAtcCodes(text)
+                                val result = catalogRepository.searchAtcCodes(text)
                                 emit(
-                                    if (results.isEmpty()) {
+                                    if (result.items.isEmpty()) {
                                         CatalogSearchUiState.Empty
                                     } else {
-                                        CatalogSearchUiState.FamilyResults(results)
+                                        CatalogSearchUiState.FamilyResults(result.items, result.isFromCache)
                                     },
                                 )
                             }

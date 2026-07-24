@@ -166,27 +166,44 @@ fun AllergiesScreen(
                     textAlign = TextAlign.Center,
                     modifier = Modifier.fillMaxWidth().padding(16.dp),
                 )
-                is CatalogSearchUiState.IngredientResults -> state.items.forEach { item ->
+                is CatalogSearchUiState.IngredientResults -> {
+                    if (state.isFromCache) CacheNotice()
+                    state.items.forEach { item ->
                     val alreadyAdded = allergies.any {
                         it.tipo == AllergyType.PRINCIPIO_ACTIVO && it.principioActivoId == item.id
                     }
-                    IngredientResultRow(
-                        item = item,
-                        alreadyAdded = alreadyAdded,
-                        onAdd = { viewModel.addIngredientAllergy(item) },
-                    )
+                        IngredientResultRow(
+                            item = item,
+                            alreadyAdded = alreadyAdded,
+                            onAdd = { viewModel.addIngredientAllergy(item) },
+                        )
+                    }
                 }
-                is CatalogSearchUiState.FamilyResults -> state.items.forEach { item ->
-                    val alreadyAdded = allergies.any { it.tipo == AllergyType.FAMILIA && it.atcCodigo == item.codigo }
-                    FamilyResultRow(
-                        item = item,
-                        alreadyAdded = alreadyAdded,
-                        onAdd = { viewModel.addFamilyAllergy(item) },
-                    )
+                is CatalogSearchUiState.FamilyResults -> {
+                    if (state.isFromCache) CacheNotice()
+                    state.items.forEach { item ->
+                        val alreadyAdded = allergies.any {
+                            it.tipo == AllergyType.FAMILIA && it.atcCodigo == item.codigo
+                        }
+                        FamilyResultRow(
+                            item = item,
+                            alreadyAdded = alreadyAdded,
+                            onAdd = { viewModel.addFamilyAllergy(item) },
+                        )
+                    }
                 }
             }
         }
     }
+}
+
+@Composable
+private fun CacheNotice() {
+    Text(
+        "Sin acceso al catálogo · mostrando resultados guardados",
+        style = MaterialTheme.typography.bodySmall,
+        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+    )
 }
 
 @Composable
