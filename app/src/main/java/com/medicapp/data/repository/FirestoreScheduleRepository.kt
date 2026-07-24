@@ -27,38 +27,43 @@ class FirestoreScheduleRepository(
     private fun dosesCollection(scheduleId: String) =
         schedulesCollection().document(scheduleId).collection("doses")
 
-    override fun getSchedules(): Flow<List<MedicationSchedule>> = callbackFlow {
-        val registration = schedulesCollection()
-            .orderBy("createdAt", Query.Direction.DESCENDING)
-            .addSnapshotListener { snapshot, error ->
-                if (error != null) {
-                    Log.w("ScheduleRepository", "Schedules listener failed", error)
-                    trySend(emptyList())
-                    return@addSnapshotListener
-                }
-                trySend(snapshot?.documents.orEmpty().mapNotNull { it.toMedicationSchedule() })
-            }
-        awaitClose { registration.remove() }
-    }
-
+    /**
+     * Pide una fila de más que el límite pedido: si llega, es que hay página siguiente. Comparar
+     * `size >= limit` en su lugar deja un indicador de carga infinito cuando el total es múltiplo
+     * exacto del tamaño de página.
+     */
     override fun getSchedulesPage(limit: Long): Flow<PagedResult<MedicationSchedule>> = callbackFlow {
         val registration = schedulesCollection()
             .orderBy("createdAt", Query.Direction.DESCENDING)
-            .limit(limit)
+            .limit(limit + 1)
             .addSnapshotListener { snapshot, error ->
                 if (error != null) {
                     Log.w("ScheduleRepository", "Schedules page listener failed", error)
                     trySend(PagedResult(emptyList(), hasMore = false, isFromCache = false))
                     return@addSnapshotListener
                 }
-                val items = snapshot?.documents.orEmpty().mapNotNull { it.toMedicationSchedule() }
+                val loaded = snapshot?.documents.orEmpty().mapNotNull { it.toMedicationSchedule() }
                 trySend(
                     PagedResult(
-                        items = items,
-                        hasMore = items.size.toLong() >= limit,
+                        items = loaded.take(limit.toInt()),
+                        hasMore = loaded.size > limit,
                         isFromCache = snapshot?.metadata?.isFromCache ?: false,
                     ),
                 )
+            }
+        awaitClose { registration.remove() }
+    }
+
+    override fun getActiveScheduleNregistros(): Flow<Set<String>> = callbackFlow {
+        val registration = schedulesCollection()
+            .whereEqualTo("status", ScheduleStatus.ACTIVE.name)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    Log.w("ScheduleRepository", "Active schedules listener failed", error)
+                    trySend(emptySet())
+                    return@addSnapshotListener
+                }
+                trySend(snapshot?.documents.orEmpty().mapNotNull { it.getString("nregistro") }.toSet())
             }
         awaitClose { registration.remove() }
     }
@@ -77,8 +82,31 @@ class FirestoreScheduleRepository(
         awaitClose { registration.remove() }
     }
 
+    override fun observeSchedule(scheduleId: String): Flow<MedicationSchedule?> = callbackFlow {
+        val registration = schedulesCollection().document(scheduleId)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    Log.w("ScheduleRepository", "Schedule listener failed", error)
+                    trySend(null)
+                    return@addSnapshotListener
+                }
+                trySend(snapshot?.toMedicationSchedule())
+            }
+        awaitClose { registration.remove() }
+    }
+
     override suspend fun getSchedule(scheduleId: String): MedicationSchedule? =
         schedulesCollection().document(scheduleId).get().await().toMedicationSchedule()
+
+    override suspend fun hasActiveScheduleFor(nregistro: String): Boolean =
+        schedulesCollection()
+            .whereEqualTo("nregistro", nregistro)
+            .whereEqualTo("status", ScheduleStatus.ACTIVE.name)
+            .limit(1)
+            .get()
+            .await()
+            .isEmpty
+            .not()
 
     override suspend fun getDose(scheduleId: String, doseId: String): MedicationDose? =
         dosesCollection(scheduleId).document(doseId).get().await().toMedicationDose(scheduleId)

@@ -12,12 +12,10 @@ import com.medicapp.MedicApp
 import com.medicapp.data.repository.ReasonRepository
 import com.medicapp.data.repository.ScheduleRepository
 import com.medicapp.model.Reason
-import com.medicapp.model.ScheduleStatus
 import com.medicapp.notifications.DoseAlarmScheduler
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -58,9 +56,7 @@ class CreateScheduleViewModel(
             }
         }
         viewModelScope.launch {
-            val hasDuplicate = scheduleRepository.getSchedules().first().any {
-                it.status == ScheduleStatus.ACTIVE && it.nregistro == nregistroArg
-            }
+            val hasDuplicate = scheduleRepository.hasActiveScheduleFor(nregistroArg)
             _uiState.update { it.copy(hasDuplicateActiveSchedule = hasDuplicate) }
         }
     }

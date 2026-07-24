@@ -23,17 +23,30 @@ class FakeScheduleRepository : ScheduleRepository {
 
     fun dosesSnapshot(scheduleId: String): List<MedicationDose> = dosesFlow(scheduleId).value
 
-    override fun getSchedules(): Flow<List<MedicationSchedule>> = schedulesFlow
-
     override fun getSchedulesPage(limit: Long): Flow<PagedResult<MedicationSchedule>> = schedulesFlow.map { schedules ->
-        val page = schedules.take(limit.toInt())
-        PagedResult(items = page, hasMore = page.size.toLong() >= limit, isFromCache = false)
+        val loaded = schedules.take(limit.toInt() + 1)
+        PagedResult(
+            items = loaded.take(limit.toInt()),
+            hasMore = loaded.size.toLong() > limit,
+            isFromCache = false,
+        )
+    }
+
+    override fun getActiveScheduleNregistros(): Flow<Set<String>> = schedulesFlow.map { schedules ->
+        schedules.filter { it.status == ScheduleStatus.ACTIVE }.map { it.nregistro }.toSet()
     }
 
     override fun getDoses(scheduleId: String): Flow<List<MedicationDose>> = dosesFlow(scheduleId)
 
+    override fun observeSchedule(scheduleId: String): Flow<MedicationSchedule?> = schedulesFlow.map { schedules ->
+        schedules.firstOrNull { it.id == scheduleId }
+    }
+
     override suspend fun getSchedule(scheduleId: String): MedicationSchedule? =
         schedulesFlow.value.firstOrNull { it.id == scheduleId }
+
+    override suspend fun hasActiveScheduleFor(nregistro: String): Boolean =
+        schedulesFlow.value.any { it.status == ScheduleStatus.ACTIVE && it.nregistro == nregistro }
 
     override suspend fun getDose(scheduleId: String, doseId: String): MedicationDose? =
         dosesFlow(scheduleId).value.firstOrNull { it.id == doseId }
