@@ -1,6 +1,8 @@
 package com.medicapp.di
 
 import android.content.Context
+import com.medicapp.data.backup.BackupRepository
+import com.medicapp.data.backup.FirestoreBackupRepository
 import com.medicapp.data.remote.NetworkModule
 import com.medicapp.data.remote.firebase.FirebaseModule
 import com.medicapp.data.repository.AllergyRepository
@@ -43,4 +45,7 @@ class AppContainer(context: Context) {
 
     val scheduleRepository: ScheduleRepository =
         FirestoreScheduleRepository(FirebaseModule.firestore, authRepository)
+
+    val backupRepository: BackupRepository =
+        FirestoreBackupRepository(FirebaseModule.firestore, authRepository)
 }
