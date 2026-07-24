@@ -8,22 +8,8 @@ description: Lanza MedicApp en el emulador Android y la recorre para comprobar u
 Receta verificada de punta a punta. Los tres puntos que hacen perder tiempo si no se
 conocen están marcados con ⚠.
 
-## Antes de tocar código: rama de feature
-
-Este repo usa **git flow** (ya inicializado: `main` / `develop`, prefijo `feature/`).
-
-Toda mejora o funcionalidad nueva empieza con su propia rama, nunca commiteando
-directamente en `develop`:
-
-```powershell
-git flow feature start <nombre-descriptivo>   # sale de develop
-# ... commits ...
-git flow feature finish <nombre-descriptivo>  # mezcla en develop y borra la rama
-```
-
-Una rama por asunto. Si un trabajo mezcla cosas sin relación (p. ej. una optimización de
-consultas y utillaje del repo), van en ramas separadas para que cada una se pueda revisar
-y revertir por su cuenta.
+Las convenciones del proyecto (git flow, distribución en debug, commits en español) están en
+`CLAUDE.md`, que se lee en cada sesión. Aquí solo va la mecánica del emulador.
 
 ## Entorno
 
