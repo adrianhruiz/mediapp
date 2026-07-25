@@ -35,7 +35,7 @@ class FakeAllergyRepository(
 
     override suspend fun addPrincipiosActivos(principiosActivos: List<PrincipioActivo>) {
         save(
-            principiosActivos.map {
+            principiosActivos.distinctBy { it.id }.map {
                 Allergy(
                     id = principioActivoDocumentId(it.id),
                     tipo = AllergyType.PRINCIPIO_ACTIVO,
@@ -48,7 +48,7 @@ class FakeAllergyRepository(
 
     override suspend fun addFamilias(familias: List<AtcCode>) {
         save(
-            familias.map {
+            familias.distinctBy { it.codigo }.map {
                 Allergy(
                     id = familiaDocumentId(it.codigo),
                     tipo = AllergyType.FAMILIA,

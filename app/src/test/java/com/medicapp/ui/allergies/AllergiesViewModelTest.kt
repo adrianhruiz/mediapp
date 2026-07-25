@@ -218,6 +218,42 @@ class AllergiesViewModelTest {
     }
 
     @Test
+    fun `several names of one ingredient become a single allergy, with the first name`() = runTest(dispatcher) {
+        // CIMA reparte el mismo identificador entre las sales y sinónimos de un principio activo:
+        // buscar "penicilina" devuelve catorce nombres que son, en realidad, dos.
+        val response = MaestrasResponseDto(
+            totalFilas = 3,
+            pagina = 1,
+            tamanioPagina = 200,
+            resultados = listOf(
+                MaestraItemDto(id = 106, nombre = "BENCILPENICILINA"),
+                MaestraItemDto(id = 106, nombre = "BENCILPENICILINA POTASICA"),
+                MaestraItemDto(id = 105, nombre = "FENOXIMETILPENICILINA"),
+            ),
+        )
+        val viewModel = AllergiesViewModel(
+            FakeAllergyRepository(),
+            MedicationCatalogRepository(FakeCimaApiService(maestrasResponse = response)),
+        )
+        val searchJob = launch { viewModel.searchState.collect {} }
+        val allergiesJob = launch { viewModel.allergies.collect {} }
+
+        viewModel.onQueryChanged("penicilina")
+        advanceTimeBy(400)
+        runCurrent()
+
+        viewModel.addAllSearchResults()
+        advanceUntilIdle()
+
+        assertEquals(
+            listOf("BENCILPENICILINA", "FENOXIMETILPENICILINA"),
+            viewModel.allergies.value.map { it.principioActivoNombre },
+        )
+        searchJob.cancel()
+        allergiesJob.cancel()
+    }
+
+    @Test
     fun `marking the same allergy twice does not duplicate it`() = runTest(dispatcher) {
         val allergyRepository = FakeAllergyRepository()
         val viewModel = AllergiesViewModel(

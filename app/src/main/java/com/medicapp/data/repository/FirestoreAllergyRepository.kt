@@ -60,16 +60,25 @@ class FirestoreAllergyRepository(
         collection().document(familiaDocumentId(atcCodigo)).set(familiaData(atcCodigo, atcNombre)).await()
     }
 
+    /**
+     * CIMA devuelve varios nombres para el mismo principio activo —sales y sinónimos comparten
+     * identificador—, así que la lista trae repetidos que caen en el mismo documento. Se queda
+     * el primero, que es el que encabeza los resultados en pantalla.
+     */
     override suspend fun addPrincipiosActivos(principiosActivos: List<PrincipioActivo>) {
         writeInBatches(
-            principiosActivos.associate {
+            principiosActivos.distinctBy { it.id }.associate {
                 principioActivoDocumentId(it.id) to principioActivoData(it.id, it.nombre)
             },
         )
     }
 
     override suspend fun addFamilias(familias: List<AtcCode>) {
-        writeInBatches(familias.associate { familiaDocumentId(it.codigo) to familiaData(it.codigo, it.nombre) })
+        writeInBatches(
+            familias.distinctBy { it.codigo }.associate {
+                familiaDocumentId(it.codigo) to familiaData(it.codigo, it.nombre)
+            },
+        )
     }
 
     private suspend fun writeInBatches(documents: Map<String, Map<String, Any?>>) {
