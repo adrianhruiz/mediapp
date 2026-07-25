@@ -36,6 +36,7 @@ class NetworkModule(context: Context) {
         .readTimeout(15, TimeUnit.SECONDS)
         .cache(cache)
         .addInterceptor(CircuitBreakerInterceptor(circuitBreaker, isOnline = ::isOnline))
+        .addInterceptor(RetryInterceptor())
         .addInterceptor(OfflineFallbackInterceptor(isOnline = ::isOnline))
         .addInterceptor(CacheOriginInterceptor())
         .addNetworkInterceptor(CimaCacheInterceptor())
