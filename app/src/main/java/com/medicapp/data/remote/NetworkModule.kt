@@ -42,7 +42,10 @@ class NetworkModule(context: Context) {
         .addNetworkInterceptor(CimaCacheInterceptor())
         .apply {
             if (BuildConfig.DEBUG) {
-                addInterceptor(HttpLoggingInterceptor().apply { level = HttpLoggingInterceptor.Level.BODY })
+                // BASIC y no BODY: el cuerpo de una búsqueda de CIMA son cientos de kilobytes que
+                // hay que copiar a texto y volcar al log en cada llamada, y para seguir qué se
+                // pide y cómo responde basta con la línea de petición y la de respuesta.
+                addInterceptor(HttpLoggingInterceptor().apply { level = HttpLoggingInterceptor.Level.BASIC })
             }
         }
         .build()
