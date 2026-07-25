@@ -19,6 +19,11 @@ object FirebaseModule {
                     },
                 )
             }
+            // Con la caché sin límite, las consultas que se resuelven en local acaban recorriendo
+            // todo lo guardado. Esto deja que Firestore se cree sus propios índices en el móvil
+            // para las consultas que repite, que aquí son las de siempre: el historial por fecha,
+            // las pautas activas, las dosis pendientes.
+            persistentCacheIndexManager?.enableIndexAutoCreation()
         }
     }
 }
