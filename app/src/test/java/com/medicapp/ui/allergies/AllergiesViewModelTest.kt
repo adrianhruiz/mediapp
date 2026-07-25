@@ -184,6 +184,57 @@ class AllergiesViewModelTest {
     }
 
     @Test
+    fun `adding all search results takes a single write`() = runTest(dispatcher) {
+        val response = MaestrasResponseDto(
+            totalFilas = 3,
+            pagina = 1,
+            tamanioPagina = 200,
+            resultados = listOf(
+                MaestraItemDto(codigo = "J01C", nombre = "Penicilinas"),
+                MaestraItemDto(codigo = "J01CA", nombre = "Penicilinas de amplio espectro"),
+                MaestraItemDto(codigo = "J01CE", nombre = "Penicilinas sensibles"),
+            ),
+        )
+        val allergyRepository = FakeAllergyRepository()
+        val viewModel = AllergiesViewModel(
+            allergyRepository,
+            MedicationCatalogRepository(FakeCimaApiService(maestrasResponse = response)),
+        )
+        val searchJob = launch { viewModel.searchState.collect {} }
+        val allergiesJob = launch { viewModel.allergies.collect {} }
+
+        viewModel.onSearchModeChanged(AllergySearchMode.FAMILIA)
+        viewModel.onQueryChanged("penicilina")
+        advanceTimeBy(400)
+        runCurrent()
+
+        viewModel.addAllSearchResults()
+        advanceUntilIdle()
+
+        assertEquals(3, viewModel.allergies.value.size)
+        assertEquals("las tres van en el mismo lote", 1, allergyRepository.writeCount)
+        searchJob.cancel()
+        allergiesJob.cancel()
+    }
+
+    @Test
+    fun `marking the same allergy twice does not duplicate it`() = runTest(dispatcher) {
+        val allergyRepository = FakeAllergyRepository()
+        val viewModel = AllergiesViewModel(
+            allergyRepository,
+            MedicationCatalogRepository(FakeCimaApiService()),
+        )
+        val allergiesJob = launch { viewModel.allergies.collect {} }
+
+        allergyRepository.addPrincipioActivo(214, "IBUPROFENO")
+        allergyRepository.addPrincipioActivo(214, "IBUPROFENO")
+        advanceUntilIdle()
+
+        assertEquals(1, viewModel.allergies.value.size)
+        allergiesJob.cancel()
+    }
+
+    @Test
     fun `addableResultCount only counts results that are not already marked`() = runTest(dispatcher) {
         val response = MaestrasResponseDto(
             totalFilas = 2,

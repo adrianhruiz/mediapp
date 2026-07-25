@@ -137,15 +137,14 @@ class AllergiesViewModel(
         viewModelScope.launch { allergyRepository.addFamilia(atc.codigo, atc.nombre) }
     }
 
+    /** Todas de una vez: una escritura para la lista entera, no una por resultado. */
     fun addAllSearchResults() {
         when (val state = searchState.value) {
             is CatalogSearchUiState.IngredientResults -> viewModelScope.launch {
-                state.items.filterNot { isIngredientAdded(it) }
-                    .forEach { allergyRepository.addPrincipioActivo(it.id, it.nombre) }
+                allergyRepository.addPrincipiosActivos(state.items.filterNot { isIngredientAdded(it) })
             }
             is CatalogSearchUiState.FamilyResults -> viewModelScope.launch {
-                state.items.filterNot { isFamilyAdded(it) }
-                    .forEach { allergyRepository.addFamilia(it.codigo, it.nombre) }
+                allergyRepository.addFamilias(state.items.filterNot { isFamilyAdded(it) })
             }
             else -> Unit
         }
