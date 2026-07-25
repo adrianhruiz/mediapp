@@ -1,11 +1,13 @@
 package com.medicapp.data.repository
 
 import android.util.Log
+import com.google.firebase.firestore.DocumentReference
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
 import com.medicapp.domain.DoseScheduleCalculator
+import com.medicapp.domain.PendingDoseCounter
 import com.medicapp.model.DoseStatus
 import com.medicapp.model.MedicationDose
 import com.medicapp.model.MedicationSchedule
@@ -135,6 +137,7 @@ class FirestoreScheduleRepository(
                 "reasonId" to reasonId,
                 "reasonNombre" to reasonNombre,
                 "status" to ScheduleStatus.ACTIVE.name,
+                PendingDoseCounter.FIELD to totalDoses,
                 "createdAt" to FieldValue.serverTimestamp(),
             ),
         )
@@ -176,24 +179,53 @@ class FirestoreScheduleRepository(
         return ScheduleWithDoses(schedule, doses)
     }
 
+    /**
+     * La dosis y el contador de la pauta se escriben en el mismo lote, así que marcar una dosis
+     * no necesita consultar las demás para saber si la pauta ha terminado.
+     *
+     * El contador se resta con `increment` en vez de escribir el número calculado: si dos dosis
+     * se marcan a la vez —desde la notificación y desde la pantalla— ninguna pisa a la otra.
+     */
     override suspend fun markDoseTaken(scheduleId: String, doseId: String, historyEntryId: String) {
-        dosesCollection(scheduleId).document(doseId).update(
-            mapOf(
-                "status" to DoseStatus.TAKEN.name,
-                "takenAtMillis" to System.currentTimeMillis(),
-                "historyEntryId" to historyEntryId,
-            ),
-        ).await()
+        val scheduleRef = schedulesCollection().document(scheduleId)
+        val pendingBefore = scheduleRef.get().await().getLong(PendingDoseCounter.FIELD)
 
-        val remainingPending = dosesCollection(scheduleId)
+        val batch = firestore.batch()
+        batch.update(dosesCollection(scheduleId).document(doseId), takenDoseData(historyEntryId))
+
+        if (pendingBefore == null) {
+            // Pauta anterior al contador: se cuenta a mano esta vez y se deja puesto.
+            batch.commit().await()
+            backfillPendingDoses(scheduleId, scheduleRef)
+            return
+        }
+
+        val pendingAfter = PendingDoseCounter.pendingAfterTaking(pendingBefore)
+        batch.update(scheduleRef, scheduleUpdate(FieldValue.increment(-1), pendingAfter))
+        batch.commit().await()
+    }
+
+    private suspend fun backfillPendingDoses(scheduleId: String, scheduleRef: DocumentReference) {
+        val pendingAfter = dosesCollection(scheduleId)
             .whereEqualTo("status", DoseStatus.PENDING.name)
-            .limit(1)
             .get()
             .await()
-        if (remainingPending.isEmpty) {
-            schedulesCollection().document(scheduleId).update("status", ScheduleStatus.CLOSED.name).await()
-        }
+            .size()
+            .toLong()
+        scheduleRef.update(scheduleUpdate(pendingAfter, pendingAfter)).await()
     }
+
+    /** Deja la cuenta pendiente y, si era la última dosis, cierra la pauta de paso. */
+    private fun scheduleUpdate(pendingValue: Any, pendingAfter: Long): Map<String, Any> = buildMap {
+        put(PendingDoseCounter.FIELD, pendingValue)
+        if (PendingDoseCounter.closesSchedule(pendingAfter)) put("status", ScheduleStatus.CLOSED.name)
+    }
+
+    private fun takenDoseData(historyEntryId: String) = mapOf(
+        "status" to DoseStatus.TAKEN.name,
+        "takenAtMillis" to System.currentTimeMillis(),
+        "historyEntryId" to historyEntryId,
+    )
 
     override suspend fun getPendingDoses(scheduleId: String): List<MedicationDose> =
         dosesCollection(scheduleId)
@@ -212,7 +244,10 @@ class FirestoreScheduleRepository(
         pendingDoses.documents.forEach { doc ->
             batch.update(doc.reference, "status", DoseStatus.SKIPPED.name)
         }
-        batch.update(schedulesCollection().document(scheduleId), "status", ScheduleStatus.CLOSED.name)
+        batch.update(
+            schedulesCollection().document(scheduleId),
+            mapOf("status" to ScheduleStatus.CLOSED.name, PendingDoseCounter.FIELD to 0),
+        )
         batch.commit().await()
     }
 
