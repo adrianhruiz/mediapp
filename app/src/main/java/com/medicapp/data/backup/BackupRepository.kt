@@ -4,6 +4,7 @@ import com.google.firebase.Timestamp
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FirebaseFirestore
 import com.medicapp.data.repository.AuthRepository
+import com.medicapp.data.repository.HistorySummary
 import kotlinx.coroutines.tasks.await
 import java.util.Date
 
@@ -77,6 +78,12 @@ class FirestoreBackupRepository(
             val batch = firestore.batch()
             chunk.forEach { (reference, data) -> batch.set(reference, data) }
             batch.commit().await()
+        }
+
+        // El resumen de medicamentos del historial se queda corto tras restaurar entradas.
+        // Borrarlo es más simple que corregirlo: quien lo lea lo rehará con los datos ya puestos.
+        if (plan.takenMedications.isNotEmpty()) {
+            user.collection(HistorySummary.COLLECTION).document(HistorySummary.DOCUMENT).delete().await()
         }
 
         return ImportResult(added = plan.added, skipped = plan.skipped)
