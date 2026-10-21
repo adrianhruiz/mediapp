@@ -8,11 +8,7 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Today
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -40,6 +36,7 @@ import com.medicapp.ui.schedule.ScheduleDetailScreen
 import com.medicapp.ui.search.MedicationDetailScreen
 import com.medicapp.ui.search.SearchScreen
 import com.medicapp.ui.today.TodayScreen
+import com.medicapp.ui.today.TodayViewModel
 import java.net.URLEncoder
 
 private const val ROUTE_LOGIN = "login"
@@ -55,7 +52,7 @@ private const val ROUTE_CREATE_SCHEDULE = "createSchedule?nregistro={nregistro}&
 private const val ROUTE_SCHEDULE_DETAIL = "scheduleDetail/{scheduleId}"
 
 /** Pestañas de la barra inferior. Recordatorios ya no es pestaña: se abre desde Hoy. */
-private data class BottomTab(val route: String, val label: String, val icon: ImageVector)
+internal data class BottomTab(val route: String, val label: String, val icon: ImageVector)
 
 private val bottomTabs = listOf(
     BottomTab(ROUTE_TODAY, "Hoy", Icons.Default.Today),
@@ -104,22 +101,22 @@ private fun MainNavHost(startDestination: String, initialScheduleId: String?, on
     Scaffold(
         bottomBar = {
             if (currentRoute in bottomBarRoutes) {
-                NavigationBar {
-                    bottomTabs.forEach { tab ->
-                        NavigationBarItem(
-                            selected = currentRoute == tab.route,
-                            onClick = {
-                                navController.navigate(tab.route) {
-                                    popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                                    launchSingleTop = true
-                                    restoreState = true
-                                }
-                            },
-                            icon = { Icon(tab.icon, contentDescription = null) },
-                            label = { Text(tab.label) },
-                        )
-                    }
-                }
+                // Solo con sesión iniciada, que es cuando se ve la barra: las tomas de hoy
+                // necesitan usuario. Firestore comparte el listener con la propia pantalla Hoy.
+                val todayViewModel: TodayViewModel = viewModel(factory = TodayViewModel.Factory)
+                val today by todayViewModel.uiState.collectAsStateWithLifecycle()
+                BlisterNavBar(
+                    tabs = bottomTabs,
+                    currentRoute = currentRoute,
+                    badges = mapOf(ROUTE_TODAY to today.plan.doses.count { it.overdue }),
+                    onSelect = { tab ->
+                        navController.navigate(tab.route) {
+                            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                    },
+                )
             }
         },
     ) { innerPadding ->
