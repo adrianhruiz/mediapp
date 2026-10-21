@@ -9,7 +9,7 @@ object MedicationNames {
 
     private val lowercaseWords = setOf("de", "del", "la", "el", "los", "las", "y", "e", "en", "con", "para", "por", "sin", "a", "al", "o")
     private val units = setOf("mg", "g", "ml", "mcg", "µg", "ui", "mmol", "meq", "%")
-    private val acronyms = setOf("EFG", "DH", "SL")
+    private val acronyms = setOf("EFG", "DH", "SL", "UI", "U.I")
 
     /** El nombre con mayúscula inicial, sin tocar los que ya vienen escritos a mano. */
     fun pretty(nombre: String): String {
@@ -26,7 +26,15 @@ object MedicationNames {
         val words = pretty(nombre).split(" ")
         val firstNumber = words.indexOfFirst { it.firstOrNull()?.isDigit() == true }
         if (firstNumber <= 0) return words.joinToString(" ") to null
-        return words.take(firstNumber).joinToString(" ") to words.drop(firstNumber).joinToString(" ")
+        return words.take(firstNumber).joinToString(" ") to detail(words.drop(firstNumber).joinToString(" "))
+    }
+
+    /**
+     * Dosis y forma en minúscula, como se escribirían a mano ("1 g polvo para solución oral"),
+     * salvo las siglas. Con mayúscula en cada palabra parecía un titular.
+     */
+    fun detail(text: String): String = text.trim().split(Regex("\\s+")).joinToString(" ") { word ->
+        if (word.uppercase().trim('(', ')', ',', '.') in acronyms) word.uppercase() else word.lowercase()
     }
 
     private fun prettyWord(word: String, index: Int): String {

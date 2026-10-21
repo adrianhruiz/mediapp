@@ -27,9 +27,15 @@ class MedicationNamesTest {
     @Test
     fun `split separates the brand from dose and form`() {
         assertEquals(
-            "Omeprazol Normon" to "20 mg Capsulas Duras EFG",
+            "Omeprazol Normon" to "20 mg capsulas duras EFG",
             MedicationNames.split("OMEPRAZOL NORMON 20 mg CAPSULAS DURAS EFG"),
         )
+    }
+
+    @Test
+    fun `dose and form read in lowercase except acronyms`() {
+        assertEquals("1.000.000 U.I. polvo y disolvente", MedicationNames.detail("1.000.000 U.i. Polvo Y Disolvente"))
+        assertEquals("1 millones UI", MedicationNames.detail("1 MILLONES UI"))
     }
 
     @Test

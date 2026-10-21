@@ -20,6 +20,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 data class CreateScheduleUiState(
+    val nregistro: String = "",
     val nombreMedicamento: String = "",
     val intervalHoursInput: String = "24",
     val totalDosesInput: String = "1",
@@ -45,7 +46,7 @@ class CreateScheduleViewModel(
 
     private var allReasons: List<Reason> = emptyList()
 
-    private val _uiState = MutableStateFlow(CreateScheduleUiState(nombreMedicamento = nombreArg.orEmpty()))
+    private val _uiState = MutableStateFlow(CreateScheduleUiState(nregistro = nregistroArg, nombreMedicamento = nombreArg.orEmpty()))
     val uiState: StateFlow<CreateScheduleUiState> = _uiState.asStateFlow()
 
     init {

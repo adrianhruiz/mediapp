@@ -6,11 +6,13 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -23,6 +25,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.medicapp.model.Reason
 import com.medicapp.ui.components.AddedChip
+import com.medicapp.ui.components.MedicationNames
+import com.medicapp.ui.components.ScreenHeader
+import com.medicapp.ui.components.SecondaryButton
 
 @Composable
 fun AddEditEntryScreen(
@@ -39,16 +44,14 @@ fun AddEditEntryScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .windowInsetsPadding(WindowInsets.systemBars)
             .padding(16.dp),
     ) {
-        Text(
-            if (uiState.isEditMode) "Editar entrada" else "Añadir al historial",
-            style = MaterialTheme.typography.titleLarge,
-        )
-        Text(
-            uiState.nombreMedicamento,
-            style = MaterialTheme.typography.titleMedium,
-            modifier = Modifier.padding(top = 8.dp, bottom = 16.dp),
+        ScreenHeader(
+            title = MedicationNames.split(uiState.nombreMedicamento).first,
+            eyebrow = if (uiState.isEditMode) "Editar entrada" else "Añadir al historial",
+            onBack = onCancel,
+            modifier = Modifier.padding(bottom = 16.dp),
         )
         OutlinedTextField(
             value = uiState.reasonInput,
@@ -78,7 +81,7 @@ fun AddEditEntryScreen(
         }
 
         Row(modifier = Modifier.padding(top = 24.dp)) {
-            OutlinedButton(onClick = onCancel, modifier = Modifier.padding(end = 8.dp)) {
+            SecondaryButton(onClick = onCancel, modifier = Modifier.padding(end = 8.dp)) {
                 Text("Cancelar")
             }
             Button(onClick = viewModel::save, enabled = uiState.canSave) {

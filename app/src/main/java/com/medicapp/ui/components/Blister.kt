@@ -144,6 +144,8 @@ private fun DrawScope.drawWell(colors: BlisterColors, w: Float, h: Float) {
         size = Size(w, h),
         cornerRadius = corner,
     )
+    // Borde del plástico: sin él, sobre una tarjeta blanca la celda vacía desaparecía.
+    drawRoundRect(colors.glassEdge, size = Size(w, h), cornerRadius = corner, style = Stroke(1.dp.toPx()))
 }
 
 private fun DrawScope.drawPill(pill: PillStyle, colors: BlisterColors, w: Float, h: Float, alpha: Float) {
