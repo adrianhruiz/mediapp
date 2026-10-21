@@ -17,6 +17,7 @@ import com.medicapp.data.repository.MedicationHistoryRepository
 import com.medicapp.data.repository.MedicationSearchRepository
 import com.medicapp.data.repository.ReasonRepository
 import com.medicapp.data.repository.ScheduleRepository
+import com.medicapp.domain.DoseTaker
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -51,6 +52,8 @@ class AppContainer(context: Context) {
 
     val scheduleRepository: ScheduleRepository =
         FirestoreScheduleRepository(FirebaseModule.firestore, authRepository)
+
+    val doseTaker = DoseTaker(scheduleRepository, medicationHistoryRepository)
 
     val backupRepository: BackupRepository =
         FirestoreBackupRepository(FirebaseModule.firestore, authRepository)

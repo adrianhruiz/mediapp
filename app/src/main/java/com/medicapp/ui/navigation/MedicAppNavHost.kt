@@ -3,9 +3,9 @@ package com.medicapp.ui.navigation
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Folder
-import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Today
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -18,6 +18,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavDestination.Companion.hierarchy
@@ -32,18 +33,18 @@ import com.medicapp.ui.addedit.AddEditEntryScreen
 import com.medicapp.ui.allergies.AllergiesScreen
 import com.medicapp.ui.auth.LoginScreen
 import com.medicapp.ui.auth.RegisterScreen
-import com.medicapp.ui.dashboard.DashboardScreen
 import com.medicapp.ui.history.HistoryScreen
 import com.medicapp.ui.schedule.CreateScheduleScreen
 import com.medicapp.ui.schedule.RemindersScreen
 import com.medicapp.ui.schedule.ScheduleDetailScreen
 import com.medicapp.ui.search.MedicationDetailScreen
 import com.medicapp.ui.search.SearchScreen
+import com.medicapp.ui.today.TodayScreen
 import java.net.URLEncoder
 
 private const val ROUTE_LOGIN = "login"
 private const val ROUTE_REGISTER = "register"
-private const val ROUTE_DASHBOARD = "dashboard"
+private const val ROUTE_TODAY = "today"
 private const val ROUTE_SEARCH = "search"
 private const val ROUTE_ALLERGIES = "allergies"
 private const val ROUTE_HISTORY = "history"
@@ -52,6 +53,16 @@ private const val ROUTE_MEDICATION_DETAIL = "medicationDetail/{nregistro}"
 private const val ROUTE_ADD_EDIT = "addEdit?nregistro={nregistro}&nombre={nombre}&fotoUrl={fotoUrl}&entryId={entryId}"
 private const val ROUTE_CREATE_SCHEDULE = "createSchedule?nregistro={nregistro}&nombre={nombre}&fotoUrl={fotoUrl}"
 private const val ROUTE_SCHEDULE_DETAIL = "scheduleDetail/{scheduleId}"
+
+/** Pestañas de la barra inferior. Recordatorios ya no es pestaña: se abre desde Hoy. */
+private data class BottomTab(val route: String, val label: String, val icon: ImageVector)
+
+private val bottomTabs = listOf(
+    BottomTab(ROUTE_TODAY, "Hoy", Icons.Default.Today),
+    BottomTab(ROUTE_SEARCH, "Buscar", Icons.Default.Search),
+    BottomTab(ROUTE_HISTORY, "Historial", Icons.Default.History),
+    BottomTab(ROUTE_ALLERGIES, "Alergias", Icons.Default.Warning),
+)
 
 private fun encode(value: String): String = URLEncoder.encode(value, "UTF-8").replace("+", "%20")
 
@@ -67,7 +78,7 @@ fun MedicAppNavHost(
             CircularProgressIndicator()
         }
         else -> {
-            val startDestination = if (state == SessionState.LoggedIn) ROUTE_DASHBOARD else ROUTE_LOGIN
+            val startDestination = if (state == SessionState.LoggedIn) ROUTE_TODAY else ROUTE_LOGIN
             MainNavHost(
                 startDestination = startDestination,
                 initialScheduleId = if (state == SessionState.LoggedIn) initialScheduleId else null,
@@ -80,7 +91,7 @@ fun MedicAppNavHost(
 @Composable
 private fun MainNavHost(startDestination: String, initialScheduleId: String?, onSignOut: () -> Unit) {
     val navController = rememberNavController()
-    val bottomBarRoutes = setOf(ROUTE_SEARCH, ROUTE_ALLERGIES, ROUTE_HISTORY, ROUTE_REMINDERS)
+    val bottomBarRoutes = bottomTabs.map { it.route }.toSet()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.hierarchy?.firstOrNull { it.route in bottomBarRoutes }?.route
 
@@ -94,54 +105,20 @@ private fun MainNavHost(startDestination: String, initialScheduleId: String?, on
         bottomBar = {
             if (currentRoute in bottomBarRoutes) {
                 NavigationBar {
-                    NavigationBarItem(
-                        selected = currentRoute == ROUTE_SEARCH,
-                        onClick = {
-                            navController.navigate(ROUTE_SEARCH) {
-                                popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                                launchSingleTop = true
-                                restoreState = true
-                            }
-                        },
-                        icon = { Icon(Icons.Default.Search, contentDescription = null) },
-                        label = { Text("Buscar") },
-                    )
-                    NavigationBarItem(
-                        selected = currentRoute == ROUTE_ALLERGIES,
-                        onClick = {
-                            navController.navigate(ROUTE_ALLERGIES) {
-                                popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                                launchSingleTop = true
-                                restoreState = true
-                            }
-                        },
-                        icon = { Icon(Icons.Default.Warning, contentDescription = null) },
-                        label = { Text("Alergias") },
-                    )
-                    NavigationBarItem(
-                        selected = currentRoute == ROUTE_HISTORY,
-                        onClick = {
-                            navController.navigate(ROUTE_HISTORY) {
-                                popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                                launchSingleTop = true
-                                restoreState = true
-                            }
-                        },
-                        icon = { Icon(Icons.Default.Folder, contentDescription = null) },
-                        label = { Text("Medicamentos") },
-                    )
-                    NavigationBarItem(
-                        selected = currentRoute == ROUTE_REMINDERS,
-                        onClick = {
-                            navController.navigate(ROUTE_REMINDERS) {
-                                popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                                launchSingleTop = true
-                                restoreState = true
-                            }
-                        },
-                        icon = { Icon(Icons.Default.Notifications, contentDescription = null) },
-                        label = { Text("Recordatorios") },
-                    )
+                    bottomTabs.forEach { tab ->
+                        NavigationBarItem(
+                            selected = currentRoute == tab.route,
+                            onClick = {
+                                navController.navigate(tab.route) {
+                                    popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                                    launchSingleTop = true
+                                    restoreState = true
+                                }
+                            },
+                            icon = { Icon(tab.icon, contentDescription = null) },
+                            label = { Text(tab.label) },
+                        )
+                    }
                 }
             }
         },
@@ -152,22 +129,27 @@ private fun MainNavHost(startDestination: String, initialScheduleId: String?, on
         ) {
             composable(ROUTE_LOGIN) {
                 LoginScreen(
-                    onLoggedIn = { navController.navigate(ROUTE_DASHBOARD) { popUpTo(0) } },
+                    onLoggedIn = { navController.navigate(ROUTE_TODAY) { popUpTo(0) } },
                     onNavigateToRegister = { navController.navigate(ROUTE_REGISTER) },
                 )
             }
             composable(ROUTE_REGISTER) {
                 RegisterScreen(
-                    onRegistered = { navController.navigate(ROUTE_DASHBOARD) { popUpTo(0) } },
+                    onRegistered = { navController.navigate(ROUTE_TODAY) { popUpTo(0) } },
                     onNavigateToLogin = { navController.popBackStack() },
                 )
             }
-            composable(ROUTE_DASHBOARD) {
-                DashboardScreen(
-                    onNavigateSearch = { navController.navigate(ROUTE_SEARCH) },
-                    onNavigateAllergies = { navController.navigate(ROUTE_ALLERGIES) },
-                    onNavigateHistory = { navController.navigate(ROUTE_HISTORY) },
-                    onNavigateReminders = { navController.navigate(ROUTE_REMINDERS) },
+            composable(ROUTE_TODAY) {
+                TodayScreen(
+                    contentPadding = innerPadding,
+                    onOpenReminders = { navController.navigate(ROUTE_REMINDERS) },
+                    onSearch = {
+                        navController.navigate(ROUTE_SEARCH) {
+                            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                    },
                     onLogout = {
                         onSignOut()
                         navController.navigate(ROUTE_LOGIN) { popUpTo(0) }
