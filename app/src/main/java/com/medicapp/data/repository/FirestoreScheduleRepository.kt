@@ -12,10 +12,18 @@ import com.medicapp.model.DoseStatus
 import com.medicapp.model.MedicationDose
 import com.medicapp.model.MedicationSchedule
 import com.medicapp.model.ScheduleStatus
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.tasks.await
+import java.util.concurrent.ConcurrentHashMap
 
 class FirestoreScheduleRepository(
     private val firestore: FirebaseFirestore,
@@ -28,6 +36,101 @@ class FirestoreScheduleRepository(
 
     private fun dosesCollection(scheduleId: String) =
         schedulesCollection().document(scheduleId).collection("doses")
+
+    /** Usuarios cuyas pautas activas ya llevan [END_AT_FIELD] en este arranque. */
+    private val scheduleEndsChecked: MutableSet<String> = ConcurrentHashMap.newKeySet()
+
+    /**
+     * Dos filtros en Firestore: las pautas cuya última toma no es anterior a [fromMillis], y
+     * dentro de cada una solo las tomas del tramo. El tramo va sobre un único campo, así que no
+     * hace falta índice compuesto.
+     *
+     * Las pautas que aún no empiezan se descartan en el móvil para no pedir un segundo rango
+     * (eso sí exigiría índice); son documentos de pauta, no tomas, y su consulta de tomas ni se
+     * lanza.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    override fun observeDosesBetween(fromMillis: Long, toMillis: Long): Flow<List<ScheduledDose>> =
+        observeSchedulesEndingFrom(fromMillis)
+            .onStart { backfillScheduleEnds() }
+            .map { schedules -> schedules.filter { it.startAtMillis < toMillis } }
+            // El contador de pendientes cambia la pauta en cada toma; sin esto se volverían a
+            // abrir todos los listeners de tomas cada vez que se marca una.
+            .distinctUntilChanged()
+            .flatMapLatest { schedules ->
+                if (schedules.isEmpty()) {
+                    flowOf(emptyList())
+                } else {
+                    combine(schedules.map { observeDosesIn(it, fromMillis, toMillis) }) { parts ->
+                        parts.flatMap { it }.sortedBy { it.dose.scheduledAtMillis }
+                    }
+                }
+            }
+
+    private fun observeSchedulesEndingFrom(fromMillis: Long): Flow<List<MedicationSchedule>> = callbackFlow {
+        val registration = schedulesCollection()
+            .whereGreaterThanOrEqualTo(END_AT_FIELD, fromMillis)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    Log.w("ScheduleRepository", "Schedules in range listener failed", error)
+                    trySend(emptyList())
+                    return@addSnapshotListener
+                }
+                trySend(snapshot?.documents.orEmpty().mapNotNull { it.toMedicationSchedule() })
+            }
+        awaitClose { registration.remove() }
+    }
+
+    private fun observeDosesIn(
+        schedule: MedicationSchedule,
+        fromMillis: Long,
+        toMillis: Long,
+    ): Flow<List<ScheduledDose>> = callbackFlow {
+        val registration = dosesCollection(schedule.id)
+            .whereGreaterThanOrEqualTo("scheduledAtMillis", fromMillis)
+            .whereLessThan("scheduledAtMillis", toMillis)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    Log.w("ScheduleRepository", "Doses in range listener failed", error)
+                    trySend(emptyList())
+                    return@addSnapshotListener
+                }
+                trySend(
+                    snapshot?.documents.orEmpty()
+                        .mapNotNull { it.toMedicationDose(schedule.id) }
+                        .map { ScheduledDose(schedule, it) },
+                )
+            }
+        awaitClose { registration.remove() }
+    }
+
+    /**
+     * Las pautas creadas antes de [END_AT_FIELD] no lo tienen, y sin él la consulta por fechas no
+     * las encuentra. Para hoy y lo que viene solo importan las activas, así que una vez por
+     * arranque se repasan esas (consulta ya acotada por estado) y se les apunta el final. Las
+     * cerradas antiguas no se tocan: solo faltarían en semanas anteriores al cambio.
+     */
+    private suspend fun backfillScheduleEnds() {
+        val userId = authRepository.currentUserId ?: return
+        if (userId in scheduleEndsChecked) return
+        runCatching {
+            val missing = schedulesCollection()
+                .whereEqualTo("status", ScheduleStatus.ACTIVE.name)
+                .get()
+                .await()
+                .documents
+                .filter { it.getLong(END_AT_FIELD) == null }
+            if (missing.isNotEmpty()) {
+                val batch = firestore.batch()
+                missing.forEach { doc ->
+                    val schedule = doc.toMedicationSchedule() ?: return@forEach
+                    batch.update(doc.reference, END_AT_FIELD, schedule.endAtMillis())
+                }
+                batch.commit().await()
+            }
+            scheduleEndsChecked += userId
+        }.onFailure { Log.w("ScheduleRepository", "Could not backfill schedule ends", it) }
+    }
 
     /**
      * Pide una fila de más que el límite pedido: si llega, es que hay página siguiente. Comparar
@@ -138,6 +241,7 @@ class FirestoreScheduleRepository(
                 "reasonNombre" to reasonNombre,
                 "status" to ScheduleStatus.ACTIVE.name,
                 PendingDoseCounter.FIELD to totalDoses,
+                END_AT_FIELD to DoseScheduleCalculator.endAtMillis(startAtMillis, intervalHours, totalDoses),
                 "createdAt" to FieldValue.serverTimestamp(),
             ),
         )
@@ -262,7 +366,15 @@ class FirestoreScheduleRepository(
             ScheduleWithDoses(schedule, getPendingDoses(schedule.id))
         }
     }
+
+    companion object {
+        /** Hora de la última toma de la pauta, para filtrar pautas por fechas en la consulta. */
+        const val END_AT_FIELD = "endAtMillis"
+    }
 }
+
+private fun MedicationSchedule.endAtMillis() =
+    DoseScheduleCalculator.endAtMillis(startAtMillis, intervalHours, totalDoses)
 
 private fun DocumentSnapshot.toMedicationSchedule(): MedicationSchedule? {
     if (!exists()) return null

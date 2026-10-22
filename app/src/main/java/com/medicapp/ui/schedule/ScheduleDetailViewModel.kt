@@ -9,8 +9,8 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.medicapp.MedicApp
-import com.medicapp.data.repository.MedicationHistoryRepository
 import com.medicapp.data.repository.ScheduleRepository
+import com.medicapp.domain.DoseTaker
 import com.medicapp.model.DoseStatus
 import com.medicapp.model.MedicationDose
 import com.medicapp.model.MedicationSchedule
@@ -30,7 +30,7 @@ data class ScheduleDetailUiState(
 
 class ScheduleDetailViewModel(
     private val scheduleRepository: ScheduleRepository,
-    private val medicationHistoryRepository: MedicationHistoryRepository,
+    private val doseTaker: DoseTaker,
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
@@ -51,18 +51,10 @@ class ScheduleDetailViewModel(
 
     fun markDoseTaken(context: Context, dose: MedicationDose) {
         val schedule = _uiState.value.schedule ?: return
-        if (dose.status != DoseStatus.PENDING) return
         viewModelScope.launch {
-            val historyEntryId = medicationHistoryRepository.add(
-                nregistro = schedule.nregistro,
-                nombreMedicamento = schedule.nombreMedicamento,
-                reasonId = schedule.reasonId,
-                reasonNombre = schedule.reasonNombre,
-                dosisSnapshot = null,
-                fotoUrl = schedule.fotoUrl,
-            )
-            scheduleRepository.markDoseTaken(scheduleId, dose.id, historyEntryId)
-            DoseAlarmScheduler.cancelDose(context.applicationContext, scheduleId, dose.id)
+            if (doseTaker.markTaken(schedule, dose)) {
+                DoseAlarmScheduler.cancelDose(context.applicationContext, scheduleId, dose.id)
+            }
         }
     }
 
@@ -81,7 +73,7 @@ class ScheduleDetailViewModel(
                 val app = this[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY] as MedicApp
                 ScheduleDetailViewModel(
                     app.container.scheduleRepository,
-                    app.container.medicationHistoryRepository,
+                    app.container.doseTaker,
                     createSavedStateHandle(),
                 )
             }

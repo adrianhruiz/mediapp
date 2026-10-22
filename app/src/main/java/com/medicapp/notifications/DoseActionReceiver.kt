@@ -6,7 +6,6 @@ import android.content.Intent
 import android.util.Log
 import androidx.core.app.NotificationManagerCompat
 import com.medicapp.MedicApp
-import com.medicapp.model.DoseStatus
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -35,17 +34,7 @@ class DoseActionReceiver : BroadcastReceiver() {
         if (app.container.authRepository.currentUserId == null) return
         val schedule = app.container.scheduleRepository.getSchedule(scheduleId) ?: return
         val dose = app.container.scheduleRepository.getDose(scheduleId, doseId) ?: return
-        if (dose.status != DoseStatus.PENDING) return
-
-        val historyEntryId = app.container.medicationHistoryRepository.add(
-            nregistro = schedule.nregistro,
-            nombreMedicamento = schedule.nombreMedicamento,
-            reasonId = schedule.reasonId,
-            reasonNombre = schedule.reasonNombre,
-            dosisSnapshot = null,
-            fotoUrl = schedule.fotoUrl,
-        )
-        app.container.scheduleRepository.markDoseTaken(scheduleId, doseId, historyEntryId)
+        app.container.doseTaker.markTaken(schedule, dose)
     }
 
     companion object {

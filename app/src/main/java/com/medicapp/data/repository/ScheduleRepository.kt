@@ -6,7 +6,17 @@ import kotlinx.coroutines.flow.Flow
 
 data class ScheduleWithDoses(val schedule: MedicationSchedule, val doses: List<MedicationDose>)
 
+/** Una toma junto a la pauta de la que sale, para pintarla sin otra consulta. */
+data class ScheduledDose(val schedule: MedicationSchedule, val dose: MedicationDose)
+
 interface ScheduleRepository {
+
+    /**
+     * Tomas previstas entre [fromMillis] (incluido) y [toMillis] (excluido) de todas las pautas,
+     * activas o cerradas, ordenadas por hora y en tiempo real. Es lo que pintan Hoy y el
+     * historial semanal.
+     */
+    fun observeDosesBetween(fromMillis: Long, toMillis: Long): Flow<List<ScheduledDose>>
 
     fun getSchedulesPage(limit: Long): Flow<PagedResult<MedicationSchedule>>
 

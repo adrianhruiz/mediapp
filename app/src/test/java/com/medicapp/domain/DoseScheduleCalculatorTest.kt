@@ -18,6 +18,14 @@ class DoseScheduleCalculatorTest {
     }
 
     @Test
+    fun `the schedule ends at its last dose`() {
+        val start = 1_000_000_000_000L
+
+        assertEquals(start + 16 * 3_600_000L, DoseScheduleCalculator.endAtMillis(start, intervalHours = 8, totalDoses = 3))
+        assertEquals(start, DoseScheduleCalculator.endAtMillis(start, intervalHours = 8, totalDoses = 1))
+    }
+
+    @Test
     fun `a single dose is scheduled exactly at the start time`() {
         val start = 500_000L
 
