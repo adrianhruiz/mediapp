@@ -21,6 +21,20 @@ Las convenciones del proyecto (git flow, distribución en debug, commits en espa
 - Pantalla del AVD: **1080x2400**. Si tomas coordenadas de una captura reescalada,
   acuérdate de multiplicar por el factor correspondiente.
 
+### En Linux
+
+El repo también se trabaja desde Linux. Ahí la receta cambia en tres cosas:
+
+- **Java:** mise no tiene versión global; antepón
+  `mise exec java@temurin-21.0.12+101.0.LTS --` y lanza `bash ./gradlew …` (el script no
+  tiene permiso de ejecución).
+- **SDK:** `~/Android/Sdk`; `adb` en `~/Android/Sdk/platform-tools/adb`.
+- **⚠ AVD:** los emuladores están en `~/.config/.android/avd`, así que hay que pasar
+  `ANDROID_AVD_HOME=~/.config/.android/avd` al lanzar
+  `~/Android/Sdk/emulator/emulator -avd medicapp_avd`, o no lo encuentra.
+- La barra de estado del emulador usa formato de **12 horas**: "12:58" puede ser de
+  madrugada. Compruébalo con `adb shell date` antes de dar por mala una hora en la app.
+
 ```powershell
 $sdk = "$env:LOCALAPPDATA\Android\Sdk"
 $adb = "$sdk\platform-tools\adb.exe"
@@ -115,18 +129,27 @@ limpia con `keyevent 123` + varios `keyevent 67` y reescribe.
 
 ## 6. Recorrido de humo
 
-Toca las cuatro pantallas y las consultas a Firestore:
+La barra inferior es **Hoy · Buscar · Historial · Alergias**. Pautas (los recordatorios) se
+abre desde el icono de calendario de la cabecera de Hoy. Recorrido que toca las pantallas y
+las consultas a Firestore:
 
 1. **Buscar** → escribe "ibuprofeno" (espera el debounce de 350 ms + red). Debe listar
    resultados con foto, traídos de la API de CIMA.
-2. Abre una ficha → **Crear recordatorio** → 3 tomas, un motivo → Guardar.
-3. Vuelve a **Crear recordatorio** del mismo medicamento → debe salir el aviso rojo de
-   duplicado y "Guardar" deshabilitado.
+2. Abre una ficha → **Crear pauta** → 3 tomas, un motivo → **Guardar pauta**.
+3. Vuelve a **Crear pauta** del mismo medicamento → debe salir el aviso rojo de duplicado
+   y "Guardar pauta" deshabilitado.
 4. Vuelve a **Buscar** → ese medicamento debe llevar el distintivo "Ya lo tienes guardado",
    y **solo** ese.
-5. **Recordatorios** → abre la pauta → "Marcar tomada" en la Toma 1 → la cabecera debe
-   pasar de 0/3 a 1/3 **sola**, sin recargar.
-6. **Medicamentos** → la toma debe aparecer en el historial.
+5. **Hoy** → las tomas de hoy salen como celdas de blíster → "Marcar como tomada" → la celda
+   debe romperse y pasar a la siguiente toma **sola**, sin recargar.
+6. **Historial → Semana** → la toma aparece como celda rota en el día de hoy. En
+   **Historial → Medicamentos** debe aparecer la entrada.
+
+Para ver una ficha con el aviso de alergia, la cuenta de pruebas es alérgica a la
+bencilpenicilina: busca "penilevel".
+
+⚠ `connectedDebugAndroidTest` desinstala la app al acabar: después hay que volver a
+instalar y a iniciar sesión.
 
 Comprueba que no hay errores de la app:
 
