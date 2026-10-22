@@ -36,7 +36,8 @@ fun RegisterScreen(
             .padding(24.dp),
         verticalArrangement = Arrangement.Center,
     ) {
-        Text("Crear cuenta", style = MaterialTheme.typography.headlineMedium)
+        BrandMark(modifier = Modifier.padding(bottom = 20.dp))
+        Text("Crear cuenta", style = MaterialTheme.typography.displaySmall)
         Text(
             "Tus datos se guardan de forma privada en tu cuenta",
             style = MaterialTheme.typography.bodyMedium,

@@ -36,7 +36,8 @@ fun LoginScreen(
             .padding(24.dp),
         verticalArrangement = Arrangement.Center,
     ) {
-        Text("Mediapp", style = MaterialTheme.typography.headlineMedium)
+        BrandMark(modifier = Modifier.padding(bottom = 20.dp))
+        Text("MedicApp", style = MaterialTheme.typography.displaySmall)
         Text(
             "Inicia sesión para continuar",
             style = MaterialTheme.typography.bodyMedium,

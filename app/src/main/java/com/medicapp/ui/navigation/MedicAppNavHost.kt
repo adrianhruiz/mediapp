@@ -202,6 +202,7 @@ private fun MainNavHost(startDestination: String, initialScheduleId: String?, on
                     onOpenSchedule = { schedule ->
                         navController.navigate("scheduleDetail/${encode(schedule.id)}")
                     },
+                    onBack = { navController.popBackStack() },
                 )
             }
             composable(

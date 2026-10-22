@@ -35,7 +35,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -44,13 +43,13 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.em
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.medicapp.model.DoseStatus
 import com.medicapp.ui.backup.BackupMenu
 import com.medicapp.ui.components.BlisterCell
 import com.medicapp.ui.components.DoseCellState
+import com.medicapp.ui.components.Eyebrow
 import com.medicapp.ui.components.FoilCard
 import com.medicapp.ui.components.MedicationNames
 import com.medicapp.ui.components.PillStyles
@@ -185,15 +184,6 @@ fun TodayScreen(
         }
         SnackbarHost(snackbarHostState, modifier = Modifier.align(Alignment.BottomCenter))
     }
-}
-
-@Composable
-private fun Eyebrow(text: String, color: Color = MaterialTheme.colorScheme.onSurfaceVariant) {
-    Text(
-        text = text.uppercase(spanish),
-        style = MaterialTheme.typography.labelMedium.copy(fontFamily = DmMono, letterSpacing = 0.08.em),
-        color = color,
-    )
 }
 
 @Composable

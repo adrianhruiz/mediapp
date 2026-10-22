@@ -7,10 +7,15 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -20,7 +25,6 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -32,14 +36,25 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.medicapp.domain.DoseScheduleCalculator
 import com.medicapp.model.Reason
 import com.medicapp.notifications.DoseAlarmScheduler
+import com.medicapp.ui.components.BlisterCell
+import com.medicapp.ui.components.DoseCellState
+import com.medicapp.ui.components.Eyebrow
+import com.medicapp.ui.components.FoilCard
+import com.medicapp.ui.components.MedicationNames
+import com.medicapp.ui.components.PillStyles
+import com.medicapp.ui.components.ScreenHeader
+import com.medicapp.ui.components.SecondaryButton
+import com.medicapp.ui.theme.DmMono
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -73,14 +88,15 @@ fun CreateScheduleScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .windowInsetsPadding(WindowInsets.systemBars)
             .padding(16.dp)
             .verticalScroll(rememberScrollState()),
     ) {
-        Text("Crear recordatorio", style = MaterialTheme.typography.titleLarge)
-        Text(
-            uiState.nombreMedicamento,
-            style = MaterialTheme.typography.titleMedium,
-            modifier = Modifier.padding(top = 8.dp, bottom = 16.dp),
+        ScreenHeader(
+            title = MedicationNames.split(uiState.nombreMedicamento).first,
+            eyebrow = "Nueva pauta",
+            onBack = onCancel,
+            modifier = Modifier.padding(bottom = 16.dp),
         )
 
         if (uiState.hasDuplicateActiveSchedule) {
@@ -91,8 +107,8 @@ fun CreateScheduleScreen(
                 ),
             ) {
                 Text(
-                    "Ya tienes un recordatorio activo para este medicamento. " +
-                        "Ciérralo antes de crear uno nuevo.",
+                    "Ya tienes una pauta activa para este medicamento. " +
+                        "Ciérrala antes de crear otra.",
                     color = MaterialTheme.colorScheme.onErrorContainer,
                     modifier = Modifier.padding(12.dp),
                 )
@@ -136,7 +152,7 @@ fun CreateScheduleScreen(
             modifier = Modifier.padding(top = 24.dp),
         )
         Row(
-            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+            verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.padding(top = 8.dp),
         ) {
             val timeFormatter = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
@@ -148,10 +164,12 @@ fun CreateScheduleScreen(
                 style = MaterialTheme.typography.bodyLarge,
                 modifier = Modifier.padding(end = 12.dp),
             )
-            OutlinedButton(onClick = { showTimePicker = true }) {
+            SecondaryButton(onClick = { showTimePicker = true }) {
                 Text("Cambiar hora")
             }
         }
+
+        FirstDayPreview(uiState)
 
         OutlinedTextField(
             value = uiState.reasonInput,
@@ -168,19 +186,18 @@ fun CreateScheduleScreen(
             }
         }
 
-        Row(modifier = Modifier.padding(top = 24.dp)) {
-            OutlinedButton(onClick = onCancel, modifier = Modifier.padding(end = 8.dp)) {
-                Text("Cancelar")
-            }
-            Button(
-                onClick = { viewModel.save(context) },
-                enabled = uiState.reasonInput.isNotBlank() &&
-                    uiState.intervalHoursInput.isNotBlank() &&
-                    uiState.totalDosesInput.isNotBlank() &&
-                    !uiState.hasDuplicateActiveSchedule,
-            ) {
-                Text("Guardar")
-            }
+        Button(
+            onClick = { viewModel.save(context) },
+            enabled = uiState.reasonInput.isNotBlank() &&
+                uiState.intervalHoursInput.isNotBlank() &&
+                uiState.totalDosesInput.isNotBlank() &&
+                !uiState.hasDuplicateActiveSchedule,
+            modifier = Modifier.fillMaxWidth().padding(top = 24.dp),
+        ) {
+            Text("Guardar pauta")
+        }
+        SecondaryButton(onClick = onCancel, modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
+            Text("Cancelar")
         }
     }
 
@@ -234,6 +251,51 @@ fun CreateScheduleScreen(
             },
         )
     }
+}
+
+private val previewHour = SimpleDateFormat("HH:mm", Locale.forLanguageTag("es-ES"))
+private val previewDay = SimpleDateFormat("EEEE d MMM 'a las' HH:mm", Locale.forLanguageTag("es-ES"))
+
+/** Más celdas no caben en una fila y no aportan: con ver el ritmo del primer día basta. */
+private const val MAX_PREVIEW_CELLS = 6
+
+/**
+ * Las tomas del primer día en celdas de blíster, y cuándo acaba la pauta: se ve el ritmo antes
+ * de guardar, sin tener que hacer la cuenta de cabeza.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun FirstDayPreview(uiState: CreateScheduleUiState) {
+    val interval = uiState.intervalHoursInput.toIntOrNull()?.takeIf { it > 0 } ?: return
+    val total = uiState.totalDosesInput.toIntOrNull()?.takeIf { it > 0 } ?: return
+    val times = DoseScheduleCalculator.computeDoseTimes(uiState.startAtMillis, interval, total)
+    val firstDay = times.takeWhile { it < uiState.startAtMillis + 24 * 3_600_000L }.take(MAX_PREVIEW_CELLS)
+    val pill = PillStyles.forMedication(uiState.nregistro, uiState.nombreMedicamento)
+
+    Eyebrow("Primer día", modifier = Modifier.padding(top = 24.dp, bottom = 8.dp))
+    FoilCard(modifier = Modifier.fillMaxWidth()) {
+        FlowRow(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            firstDay.forEach { time ->
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    BlisterCell(state = DoseCellState.PENDING, pill = pill, width = 44.dp)
+                    Text(
+                        previewHour.format(Date(time)),
+                        style = MaterialTheme.typography.labelLarge.copy(fontFamily = DmMono),
+                    )
+                }
+            }
+        }
+    }
+    Text(
+        "$total ${if (total == 1) "toma" else "tomas"} · la última el ${previewDay.format(Date(times.last())).replace(".", "")}",
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(top = 8.dp),
+    )
 }
 
 @Composable

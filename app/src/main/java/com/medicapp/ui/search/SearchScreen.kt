@@ -32,8 +32,11 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.medicapp.model.Medication
 import com.medicapp.ui.components.AddedChip
+import com.medicapp.ui.components.MedicationNames
 import com.medicapp.ui.components.MedicationThumbnail
+import com.medicapp.ui.components.ScreenHeader
 import com.medicapp.ui.components.SearchHelpButton
+import com.medicapp.ui.theme.DmMono
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -51,8 +54,10 @@ fun SearchScreen(
         modifier = Modifier
             .fillMaxSize()
             .padding(contentPadding)
-            .padding(16.dp),
+            .padding(horizontal = 16.dp)
+            .padding(top = 8.dp),
     ) {
+        ScreenHeader(title = "Buscar", eyebrow = "Medicamentos de CIMA · AEMPS", modifier = Modifier.padding(bottom = 12.dp))
         OutlinedTextField(
             value = query,
             onValueChange = viewModel::onQueryChanged,
@@ -132,11 +137,32 @@ private fun MedicationResultCard(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            MedicationThumbnail(fotoUrl = medication.fotoUrl, modifier = Modifier.padding(end = 12.dp))
-            Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
-                Text(medication.nombre, style = MaterialTheme.typography.titleMedium)
-                medication.labtitular?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
-                medication.dosis?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+            MedicationThumbnail(
+                fotoUrl = medication.fotoUrl,
+                seed = medication.nregistro,
+                modifier = Modifier.padding(end = 12.dp),
+            )
+            val (name, detail) = MedicationNames.split(medication.nombre)
+            Column(modifier = Modifier.weight(1f).padding(end = 8.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(name, style = MaterialTheme.typography.titleMedium)
+                detail?.let {
+                    Text(
+                        it,
+                        style = MaterialTheme.typography.bodySmall.copy(fontFamily = DmMono),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                // La dosis de CIMA suele repetir la del nombre; solo se enseña si añade algo.
+                medication.dosis?.takeIf { detail?.contains(it, ignoreCase = true) != true }?.let(MedicationNames::detail)?.let {
+                    Text(
+                        it,
+                        style = MaterialTheme.typography.bodySmall.copy(fontFamily = DmMono),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                medication.labtitular?.let {
+                    Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
                 if (isInHistory) {
                     AddedChip("Ya en tu historial", modifier = Modifier.padding(top = 4.dp))
                 }
