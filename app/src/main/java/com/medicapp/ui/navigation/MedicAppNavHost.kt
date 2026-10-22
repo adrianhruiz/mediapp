@@ -33,7 +33,7 @@ import com.medicapp.ui.addedit.AddEditEntryScreen
 import com.medicapp.ui.allergies.AllergiesScreen
 import com.medicapp.ui.auth.LoginScreen
 import com.medicapp.ui.auth.RegisterScreen
-import com.medicapp.ui.history.HistoryScreen
+import com.medicapp.ui.history.HistoryHubScreen
 import com.medicapp.ui.schedule.CreateScheduleScreen
 import com.medicapp.ui.schedule.RemindersScreen
 import com.medicapp.ui.schedule.ScheduleDetailScreen
@@ -188,7 +188,7 @@ private fun MainNavHost(startDestination: String, initialScheduleId: String?, on
                 AllergiesScreen(contentPadding = innerPadding)
             }
             composable(ROUTE_HISTORY) {
-                HistoryScreen(
+                HistoryHubScreen(
                     contentPadding = innerPadding,
                     onEditEntry = { entry -> navController.navigate("addEdit?entryId=${entry.id}") },
                     onOpenMedication = { entry ->

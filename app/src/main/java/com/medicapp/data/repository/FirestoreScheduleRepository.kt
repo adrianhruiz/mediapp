@@ -106,19 +106,28 @@ class FirestoreScheduleRepository(
 
     /**
      * Las pautas creadas antes de [END_AT_FIELD] no lo tienen, y sin él la consulta por fechas no
-     * las encuentra. Para hoy y lo que viene solo importan las activas, así que una vez por
-     * arranque se repasan esas (consulta ya acotada por estado) y se les apunta el final. Las
-     * cerradas antiguas no se tocan: solo faltarían en semanas anteriores al cambio.
+     * las encuentra. Una vez por arranque se repasan las activas (para hoy y lo que viene) y las
+     * [RECENT_SCHEDULES_TO_BACKFILL] más recientes (para las últimas semanas del historial), las
+     * dos consultas acotadas, y se les apunta el final. Las cerradas más antiguas no se tocan:
+     * solo faltarían en semanas viejas, anteriores al cambio.
      */
     private suspend fun backfillScheduleEnds() {
         val userId = authRepository.currentUserId ?: return
         if (userId in scheduleEndsChecked) return
         runCatching {
-            val missing = schedulesCollection()
+            val active = schedulesCollection()
                 .whereEqualTo("status", ScheduleStatus.ACTIVE.name)
                 .get()
                 .await()
                 .documents
+            val recent = schedulesCollection()
+                .orderBy("createdAt", Query.Direction.DESCENDING)
+                .limit(RECENT_SCHEDULES_TO_BACKFILL)
+                .get()
+                .await()
+                .documents
+            val missing = (active + recent)
+                .distinctBy { it.id }
                 .filter { it.getLong(END_AT_FIELD) == null }
             if (missing.isNotEmpty()) {
                 val batch = firestore.batch()
@@ -370,6 +379,8 @@ class FirestoreScheduleRepository(
     companion object {
         /** Hora de la última toma de la pauta, para filtrar pautas por fechas en la consulta. */
         const val END_AT_FIELD = "endAtMillis"
+
+        private const val RECENT_SCHEDULES_TO_BACKFILL = 20L
     }
 }
 

@@ -10,15 +10,14 @@ import com.medicapp.MedicApp
 import com.medicapp.data.repository.ScheduleRepository
 import com.medicapp.domain.DoseTaker
 import com.medicapp.notifications.DoseAlarmScheduler
+import com.medicapp.ui.minuteTicks
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.flow.stateIn
@@ -38,15 +37,6 @@ internal fun dayRange(nowMillis: Long, zone: ZoneId): Pair<Long, Long> {
     val from = day.atStartOfDay(zone).toInstant().toEpochMilli()
     val to = day.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
     return from to to
-}
-
-/** La hora actual, una vez por minuto: basta para "toca en 5 min" y para cambiar de día. */
-private fun minuteTicks(): Flow<Long> = flow {
-    while (true) {
-        val now = System.currentTimeMillis()
-        emit(now)
-        delay(60_000 - now % 60_000)
-    }
 }
 
 class TodayViewModel(
