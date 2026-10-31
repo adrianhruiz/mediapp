@@ -20,7 +20,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -43,6 +42,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.medicapp.ui.components.GelButton
 import com.medicapp.domain.DoseScheduleCalculator
 import com.medicapp.model.Reason
 import com.medicapp.notifications.DoseAlarmScheduler
@@ -186,7 +186,7 @@ fun CreateScheduleScreen(
             }
         }
 
-        Button(
+        GelButton(
             onClick = { viewModel.save(context) },
             enabled = uiState.reasonInput.isNotBlank() &&
                 uiState.intervalHoursInput.isNotBlank() &&

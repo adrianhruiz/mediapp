@@ -39,21 +39,4 @@ val LightBlisterColors = BlisterColors(
     pillShadow = Color(0x4D18202C),
 )
 
-// En oscuro el aluminio se apaga, pero las pastillas siguen claras: son objetos físicos y en la
-// vida real no cambian de color con el modo noche.
-val DarkBlisterColors = BlisterColors(
-    foilLight = Color(0xFF3A4250),
-    foilDark = Color(0xFF232A35),
-    glass = Color(0x33FFFFFF),
-    glassEdge = Color(0x40000000),
-    wellShade = Color(0x66000000),
-    hole = Color(0xFF0B0E13),
-    holeShade = Color(0xFF000000),
-    flapLight = Color(0xFF5A6474),
-    flapDark = Color(0xFF343C49),
-    tablet = Color(0xFFE9ECF0),
-    tabletShade = Color(0xFFB9C0CA),
-    pillShadow = Color(0x80000000),
-)
-
 val LocalBlisterColors = staticCompositionLocalOf { LightBlisterColors }

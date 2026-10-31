@@ -12,7 +12,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -24,14 +23,17 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.medicapp.ui.components.GelButton
 import com.medicapp.model.AllergyType
 import com.medicapp.model.MedicationDetail
 import com.medicapp.ui.components.AddedChip
@@ -52,8 +54,10 @@ fun MedicationDetailScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     Scaffold(
+        containerColor = Color.Transparent,
         topBar = {
             TopAppBar(
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
                 title = { Eyebrow("Ficha del medicamento") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
@@ -191,7 +195,7 @@ fun MedicationDetailScreen(
                         )
                     }
 
-                    Button(
+                    GelButton(
                         onClick = { onAddToHistory(medication) },
                         enabled = uiState.canAddToHistory,
                         modifier = Modifier.fillMaxWidth().padding(top = 24.dp),

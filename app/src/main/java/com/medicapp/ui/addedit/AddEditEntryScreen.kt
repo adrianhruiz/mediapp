@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -23,6 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.medicapp.ui.components.GelButton
 import com.medicapp.model.Reason
 import com.medicapp.ui.components.AddedChip
 import com.medicapp.ui.components.MedicationNames
@@ -84,7 +84,7 @@ fun AddEditEntryScreen(
             SecondaryButton(onClick = onCancel, modifier = Modifier.padding(end = 8.dp)) {
                 Text("Cancelar")
             }
-            Button(onClick = viewModel::save, enabled = uiState.canSave) {
+            GelButton(onClick = viewModel::save, enabled = uiState.canSave) {
                 Text("Guardar")
             }
         }

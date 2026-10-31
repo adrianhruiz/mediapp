@@ -16,7 +16,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.EventNote
-import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -45,6 +44,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.medicapp.ui.components.GelButton
+import com.medicapp.ui.components.GelTone
 import com.medicapp.model.DoseStatus
 import com.medicapp.ui.backup.BackupMenu
 import com.medicapp.ui.components.BlisterCell
@@ -273,7 +274,7 @@ private fun DoseCard(dose: TodayDose, nowMillis: Long, onMarkTaken: () -> Unit) 
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             if (dose.pending) {
-                Button(onClick = onMarkTaken, modifier = Modifier.fillMaxWidth().padding(top = 12.dp)) {
+                GelButton(onClick = onMarkTaken, tone = GelTone.CORAL, modifier = Modifier.fillMaxWidth().padding(top = 12.dp)) {
                     Text("Marcar como tomada")
                 }
             }
@@ -324,7 +325,7 @@ private fun EmptyToday(onSearch: () -> Unit, onOpenReminders: () -> Unit) {
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            Button(onClick = onSearch, modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
+            GelButton(onClick = onSearch, modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
                 Text("Buscar medicamento")
             }
             TextButton(onClick = onOpenReminders, modifier = Modifier.fillMaxWidth()) {

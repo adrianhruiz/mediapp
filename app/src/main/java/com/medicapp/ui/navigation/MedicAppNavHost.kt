@@ -12,6 +12,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -25,6 +26,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.medicapp.ui.components.pinstripe
 import com.medicapp.ui.addedit.AddEditEntryScreen
 import com.medicapp.ui.allergies.AllergiesScreen
 import com.medicapp.ui.auth.LoginScreen
@@ -98,7 +100,10 @@ private fun MainNavHost(startDestination: String, initialScheduleId: String?, on
         }
     }
 
+    // El fondo de raya va aquí, una sola vez: las pantallas son transparentes y lo dejan ver.
     Scaffold(
+        modifier = Modifier.pinstripe(),
+        containerColor = Color.Transparent,
         bottomBar = {
             if (currentRoute in bottomBarRoutes) {
                 // Solo con sesión iniciada, que es cuando se ve la barra: las tomas de hoy
