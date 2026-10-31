@@ -78,7 +78,11 @@ class MedicationDetailScreenTest {
         )
 
         composeRule.onNodeWithText("Desrecomendado").assertExists()
+        composeRule.onNodeWithText("Paracetamol").assertExists()
+        composeRule.onNodeWithText("principio activo").assertExists()
         composeRule.onNodeWithText("Añadir al historial").assertIsNotEnabled()
+        // El motivo ya está en la etiqueta: no se repite bajo el botón.
+        composeRule.onNodeWithText("No puedes añadirlo", substring = true).assertDoesNotExist()
     }
 
     @Test
@@ -87,6 +91,8 @@ class MedicationDetailScreenTest {
             listOf(Allergy(id = "1", tipo = AllergyType.FAMILIA, atcCodigo = "N02B", atcNombre = "Analgésicos")),
         )
 
+        composeRule.onNodeWithText("Analgésicos").assertExists()
+        composeRule.onNodeWithText("familia · N02B").assertExists()
         composeRule.onNodeWithText("Añadir al historial").assertIsNotEnabled()
     }
 
