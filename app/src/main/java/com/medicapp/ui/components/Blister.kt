@@ -1,6 +1,5 @@
 package com.medicapp.ui.components
 
-import android.content.res.Configuration
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
@@ -231,7 +230,6 @@ private fun DrawScope.drawTorn(colors: BlisterColors, w: Float, h: Float, t: Flo
 }
 
 @Preview(name = "Claro")
-@Preview(name = "Oscuro", uiMode = Configuration.UI_MODE_NIGHT_YES)
 @Composable
 private fun BlisterCellPreview() {
     MedicAppTheme {

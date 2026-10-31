@@ -30,6 +30,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
@@ -41,15 +42,20 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.medicapp.ui.components.EngravedShadow
 import com.medicapp.ui.theme.BlisterTheme
 
 /**
- * Barra inferior como una lámina de blíster: cada pestaña es una celda, y la activa se llena de
- * tinta como una cápsula. Al pulsar, la celda se hunde un poco.
+ * Barra inferior como una lámina de blíster: cada pestaña es una celda, y la activa queda hundida
+ * en el aluminio. Al pulsar, la celda se encoge un poco.
  *
  * [badges] pone un contador coral sobre una pestaña; Hoy lo usa para las tomas atrasadas, que es
  * lo único de la barra que pide atención.
  */
+private val sunkenTop = Color(0xFFBFC5CE)
+private val sunkenBottom = Color(0xFFDDE1E6)
+private val sunkenShade = Color(0x4D18202C)
+
 @Composable
 internal fun BlisterNavBar(
     tabs: List<BottomTab>,
@@ -87,8 +93,10 @@ private fun RowScope.NavCell(tab: BottomTab, selected: Boolean, badge: Int, onCl
     val scheme = MaterialTheme.colorScheme
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
-    val fill by animateColorAsState(if (selected) scheme.primary else Color.Transparent, label = "fill")
-    val iconTint by animateColorAsState(if (selected) scheme.onPrimary else scheme.onSurfaceVariant, label = "tint")
+    // La activa no se rellena de tinta: se hunde, como un botón pulsado de 2010. Así lo más
+    // oscuro de la barra deja de ser la pestaña en la que ya estás.
+    val sunk by animateFloatAsState(if (selected) 1f else 0f, label = "sunk")
+    val iconTint by animateColorAsState(if (selected) scheme.onSurface else scheme.onSurfaceVariant, label = "tint")
     val press by animateFloatAsState(if (pressed) 0.92f else 1f, label = "press")
     val description = if (badge > 0) "${tab.label}, $badge sin marcar" else tab.label
 
@@ -111,7 +119,15 @@ private fun RowScope.NavCell(tab: BottomTab, selected: Boolean, badge: Int, onCl
                     .size(width = 60.dp, height = 34.dp)
                     .clip(CircleShape)
                     .background(Brush.verticalGradient(listOf(colors.glass, colors.glassEdge)))
-                    .background(fill)
+                    .background(Brush.verticalGradient(listOf(sunkenTop, sunkenBottom)), alpha = sunk)
+                    .drawWithContent {
+                        drawContent()
+                        // Sombra interior arriba: es lo que hace que la celda parezca hundida.
+                        drawRect(
+                            Brush.verticalGradient(listOf(sunkenShade, Color.Transparent), endY = size.height * 0.45f),
+                            alpha = sunk,
+                        )
+                    }
                     .border(1.dp, colors.glassEdge, CircleShape),
                 contentAlignment = Alignment.Center,
             ) {
@@ -139,7 +155,7 @@ private fun RowScope.NavCell(tab: BottomTab, selected: Boolean, badge: Int, onCl
         }
         Text(
             tab.label,
-            style = MaterialTheme.typography.labelMedium,
+            style = MaterialTheme.typography.labelMedium.copy(shadow = EngravedShadow),
             fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
             color = if (selected) scheme.onSurface else scheme.onSurfaceVariant,
         )

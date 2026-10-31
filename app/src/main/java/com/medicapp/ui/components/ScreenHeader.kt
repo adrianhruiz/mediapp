@@ -23,12 +23,16 @@ import java.util.Locale
 
 private val spanish = Locale.forLanguageTag("es-ES")
 
-/** Línea corta en mayúsculas y DM Mono encima de un título o una sección. */
+/** Línea corta en mayúsculas y DM Mono, grabada, encima de un título o una sección. */
 @Composable
 fun Eyebrow(text: String, modifier: Modifier = Modifier, color: Color = MaterialTheme.colorScheme.onSurfaceVariant) {
     Text(
         text = text.uppercase(spanish),
-        style = MaterialTheme.typography.labelMedium.copy(fontFamily = DmMono, letterSpacing = 0.08.em),
+        style = MaterialTheme.typography.labelMedium.copy(
+            fontFamily = DmMono,
+            letterSpacing = 0.08.em,
+            shadow = EngravedShadow,
+        ),
         color = color,
         modifier = modifier,
     )
@@ -56,7 +60,7 @@ fun ScreenHeader(
             eyebrow?.let { Eyebrow(it) }
             Text(
                 text = title,
-                style = MaterialTheme.typography.headlineMedium,
+                style = MaterialTheme.typography.headlineMedium.copy(shadow = EngravedShadow),
                 modifier = Modifier.semantics { heading() },
             )
         }

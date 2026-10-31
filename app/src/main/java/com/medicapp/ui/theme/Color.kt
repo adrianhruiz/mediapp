@@ -1,6 +1,5 @@
 package com.medicapp.ui.theme
 
-import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.ui.graphics.Color
 
@@ -19,16 +18,6 @@ private val CoralSoft = Color(0xFFFFE1DE)
 private val CoralInk = Color(0xFF7A1A12)
 private val AlertRed = Color(0xFFB5271C)
 
-private val NightFoil = Color(0xFF11151C)
-private val NightCard = Color(0xFF1B212B)
-private val NightRaised = Color(0xFF222936)
-private val NightDeep = Color(0xFF2A3240)
-private val NightLine = Color(0xFF4A5363)
-private val NightInk = Color(0xFFECEEF2)
-private val NightMuted = Color(0xFF9AA3B2)
-private val NightCoral = Color(0xFFFF7A70)
-private val NightCoralDeep = Color(0xFF5A1F1A)
-private val NightCoralSoft = Color(0xFFFFDAD5)
 
 // Las tarjetas van en blanco sobre el aluminio, así que todos los contenedores de superficie
 // son papel: así se separan del fondo sin depender de la elevación tonal de Material.
@@ -65,41 +54,4 @@ val BlisterLightColors = lightColorScheme(
     inverseSurface = Ink,
     inverseOnSurface = Foil,
     inversePrimary = FoilDeep,
-)
-
-// En oscuro no se invierte sin más: el botón principal pasa a claro para seguir siendo lo más
-// contrastado de la pantalla, y el coral se aclara un punto para leerse sobre el fondo noche.
-val BlisterDarkColors = darkColorScheme(
-    primary = NightInk,
-    onPrimary = NightFoil,
-    primaryContainer = NightDeep,
-    onPrimaryContainer = NightInk,
-    secondary = NightMuted,
-    onSecondary = NightFoil,
-    secondaryContainer = NightDeep,
-    onSecondaryContainer = NightInk,
-    tertiary = NightCoral,
-    onTertiary = NightFoil,
-    tertiaryContainer = NightCoralDeep,
-    onTertiaryContainer = NightCoralSoft,
-    error = NightCoral,
-    onError = NightFoil,
-    errorContainer = NightCoralDeep,
-    onErrorContainer = NightCoralSoft,
-    background = NightFoil,
-    onBackground = NightInk,
-    surface = NightFoil,
-    onSurface = NightInk,
-    surfaceVariant = NightDeep,
-    onSurfaceVariant = NightMuted,
-    surfaceContainerLowest = NightFoil,
-    surfaceContainerLow = NightCard,
-    surfaceContainer = NightCard,
-    surfaceContainerHigh = NightRaised,
-    surfaceContainerHighest = NightCard,
-    outline = NightLine,
-    outlineVariant = NightDeep,
-    inverseSurface = NightInk,
-    inverseOnSurface = NightFoil,
-    inversePrimary = Ink,
 )
