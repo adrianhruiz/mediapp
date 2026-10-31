@@ -38,7 +38,11 @@ import com.medicapp.model.AllergyType
 import com.medicapp.model.AtcCode
 import com.medicapp.model.PrincipioActivo
 import com.medicapp.ui.components.AddedChip
+import com.medicapp.ui.components.Eyebrow
+import com.medicapp.ui.components.MedicationNames
+import com.medicapp.ui.components.ScreenHeader
 import com.medicapp.ui.components.SearchHelpButton
+import com.medicapp.ui.theme.DmMono
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -59,7 +63,7 @@ fun AllergiesScreen(
             .padding(16.dp)
             .verticalScroll(rememberScrollState()),
     ) {
-        Text("Tus alergias", style = MaterialTheme.typography.titleLarge)
+        ScreenHeader(title = "Alergias", eyebrow = "Se avisa al buscar y al añadir")
         if (allergies.isEmpty()) {
             Text(
                 "Todavía no has marcado ninguna alergia",
@@ -215,16 +219,17 @@ private fun AllergyRow(allergy: Allergy, onDelete: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                Eyebrow(if (allergy.tipo == AllergyType.PRINCIPIO_ACTIVO) "Componente activo" else "Familia")
                 Text(
-                    if (allergy.tipo == AllergyType.PRINCIPIO_ACTIVO) "Componente activo" else "Familia",
-                    style = MaterialTheme.typography.labelMedium,
-                )
-                Text(
-                    allergy.principioActivoNombre ?: allergy.atcNombre.orEmpty(),
-                    style = MaterialTheme.typography.titleMedium,
+                    MedicationNames.pretty(allergy.principioActivoNombre ?: allergy.atcNombre.orEmpty()),
+                    style = MaterialTheme.typography.titleLarge,
                 )
                 allergy.atcCodigo?.let { codigo ->
-                    Text(codigo, style = MaterialTheme.typography.bodySmall)
+                    Text(
+                        codigo,
+                        style = MaterialTheme.typography.bodySmall.copy(fontFamily = DmMono),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
             }
             IconButton(onClick = onDelete) {

@@ -5,8 +5,12 @@ import com.medicapp.model.DoseStatus
 import com.medicapp.model.MedicationDose
 import com.medicapp.model.MedicationSchedule
 import com.medicapp.model.ScheduleStatus
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 
 class FakeScheduleRepository : ScheduleRepository {
@@ -22,6 +26,31 @@ class FakeScheduleRepository : ScheduleRepository {
     val schedules: List<MedicationSchedule> get() = schedulesFlow.value
 
     fun dosesSnapshot(scheduleId: String): List<MedicationDose> = dosesFlow(scheduleId).value
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    override fun observeDosesBetween(fromMillis: Long, toMillis: Long): Flow<List<ScheduledDose>> =
+        schedulesFlow.flatMapLatest { schedules ->
+            val inRange = schedules.filter { schedule ->
+                val endAt = DoseScheduleCalculator.endAtMillis(
+                    schedule.startAtMillis,
+                    schedule.intervalHours,
+                    schedule.totalDoses,
+                )
+                schedule.startAtMillis < toMillis && endAt >= fromMillis
+            }
+            if (inRange.isEmpty()) {
+                flowOf(emptyList())
+            } else {
+                combine(
+                    inRange.map { schedule ->
+                        dosesFlow(schedule.id).map { doses ->
+                            doses.filter { it.scheduledAtMillis in fromMillis until toMillis }
+                                .map { ScheduledDose(schedule, it) }
+                        }
+                    },
+                ) { parts -> parts.flatMap { it }.sortedBy { it.dose.scheduledAtMillis } }
+            }
+        }
 
     override fun getSchedulesPage(limit: Long): Flow<PagedResult<MedicationSchedule>> = schedulesFlow.map { schedules ->
         val loaded = schedules.take(limit.toInt() + 1)

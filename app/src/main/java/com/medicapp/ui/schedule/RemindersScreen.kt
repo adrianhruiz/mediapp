@@ -12,29 +12,35 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.medicapp.model.MedicationSchedule
 import com.medicapp.model.ScheduleStatus
+import com.medicapp.ui.components.BlisterCell
+import com.medicapp.ui.components.DoseCellState
+import com.medicapp.ui.components.Eyebrow
+import com.medicapp.ui.components.MedicationNames
 import com.medicapp.ui.components.OnBottomReached
+import com.medicapp.ui.components.PillStyles
+import com.medicapp.ui.components.ScreenHeader
+import com.medicapp.ui.components.SecondaryButton
+import com.medicapp.ui.theme.DmMono
 
 @Composable
 fun RemindersScreen(
     contentPadding: PaddingValues,
     onOpenSchedule: (MedicationSchedule) -> Unit,
+    onBack: () -> Unit,
     viewModel: RemindersViewModel = viewModel(factory = RemindersViewModel.Factory),
 ) {
     val schedules by viewModel.schedules.collectAsStateWithLifecycle()
@@ -45,12 +51,18 @@ fun RemindersScreen(
     val listState = rememberLazyListState()
     listState.OnBottomReached(onLoadMore = viewModel::loadMore)
 
+    val header = @Composable {
+        ScreenHeader(title = "Pautas", eyebrow = "Recordatorios de toma", onBack = onBack)
+    }
+
     if (schedules.isEmpty()) {
-        Column(modifier = Modifier.fillMaxSize().padding(contentPadding)) {
+        Column(modifier = Modifier.fillMaxSize().padding(contentPadding).padding(horizontal = 16.dp, vertical = 8.dp)) {
+            header()
             Text(
-                "Todavía no tienes recordatorios. Crea uno desde el detalle de un medicamento.",
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth().padding(24.dp),
+                "Todavía no tienes pautas. Crea una desde la ficha de un medicamento.",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp),
             )
         }
         return
@@ -58,11 +70,13 @@ fun RemindersScreen(
 
     LazyColumn(
         state = listState,
-        modifier = Modifier.fillMaxSize().padding(contentPadding).padding(16.dp),
+        modifier = Modifier.fillMaxSize().padding(contentPadding),
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
+        item { header() }
         if (active.isNotEmpty()) {
-            item { Text("Activos", style = MaterialTheme.typography.titleLarge) }
+            item { Eyebrow("Activas", modifier = Modifier.padding(top = 8.dp)) }
             items(active, key = { it.id }) { schedule ->
                 ScheduleCard(
                     schedule = schedule,
@@ -72,13 +86,7 @@ fun RemindersScreen(
             }
         }
         if (closed.isNotEmpty()) {
-            item {
-                Text(
-                    "Cerrados",
-                    style = MaterialTheme.typography.titleLarge,
-                    modifier = Modifier.padding(top = 16.dp),
-                )
-            }
+            item { Eyebrow("Cerradas", modifier = Modifier.padding(top = 16.dp)) }
             items(closed, key = { it.id }) { schedule ->
                 ScheduleCard(schedule = schedule, onClick = { onOpenSchedule(schedule) }, onClose = null)
             }
@@ -96,24 +104,30 @@ fun RemindersScreen(
 @Composable
 private fun ScheduleCard(schedule: MedicationSchedule, onClick: () -> Unit, onClose: (() -> Unit)?) {
     Card(modifier = Modifier.fillMaxWidth().clickable(onClick = onClick)) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(schedule.nombreMedicamento, style = MaterialTheme.typography.titleMedium)
-            Text(
-                "Cada ${schedule.intervalHours}h · ${schedule.totalDoses} tomas · ${schedule.reasonNombre}",
-                style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.padding(top = 4.dp),
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            BlisterCell(
+                state = if (schedule.status == ScheduleStatus.ACTIVE) DoseCellState.PENDING else DoseCellState.TAKEN,
+                pill = PillStyles.forMedication(schedule.nregistro, schedule.nombreMedicamento),
+                width = 30.dp,
             )
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                AssistChip(
-                    onClick = {},
-                    label = { Text(if (schedule.status == ScheduleStatus.ACTIVE) "Activo" else "Cerrado") },
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(MedicationNames.split(schedule.nombreMedicamento).first, style = MaterialTheme.typography.titleMedium)
+                Text(
+                    "Cada ${schedule.intervalHours} h · ${schedule.totalDoses} tomas",
+                    style = MaterialTheme.typography.bodySmall.copy(fontFamily = DmMono),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    "Para: ${schedule.reasonNombre}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 if (onClose != null) {
-                    OutlinedButton(onClick = onClose) { Text("Cerrar periodo") }
+                    SecondaryButton(onClick = onClose, modifier = Modifier.padding(top = 8.dp)) { Text("Cerrar periodo") }
                 }
             }
         }

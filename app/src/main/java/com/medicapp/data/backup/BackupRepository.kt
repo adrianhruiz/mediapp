@@ -4,7 +4,9 @@ import com.google.firebase.Timestamp
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FirebaseFirestore
 import com.medicapp.data.repository.AuthRepository
+import com.medicapp.data.repository.FirestoreScheduleRepository
 import com.medicapp.data.repository.HistorySummary
+import com.medicapp.domain.DoseScheduleCalculator
 import kotlinx.coroutines.tasks.await
 import java.util.Date
 
@@ -149,6 +151,7 @@ private fun BackupSchedule.toFirestore() = mapOf(
     "intervalHours" to intervalHours,
     "totalDoses" to totalDoses,
     "startAtMillis" to startAtMillis,
+    FirestoreScheduleRepository.END_AT_FIELD to DoseScheduleCalculator.endAtMillis(startAtMillis, intervalHours, totalDoses),
     "reasonId" to reasonId,
     "reasonNombre" to reasonNombre,
     "status" to status,

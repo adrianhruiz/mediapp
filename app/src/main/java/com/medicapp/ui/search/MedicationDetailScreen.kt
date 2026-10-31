@@ -1,5 +1,6 @@
 package com.medicapp.ui.search
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -20,7 +21,6 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -35,7 +35,11 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.medicapp.model.AllergyType
 import com.medicapp.model.MedicationDetail
 import com.medicapp.ui.components.AddedChip
+import com.medicapp.ui.components.Eyebrow
+import com.medicapp.ui.components.MedicationNames
 import com.medicapp.ui.components.MedicationThumbnail
+import com.medicapp.ui.components.SecondaryButton
+import com.medicapp.ui.theme.DmMono
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -50,7 +54,7 @@ fun MedicationDetailScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(uiState.medication?.nombre ?: "Medicamento") },
+                title = { Eyebrow("Ficha del medicamento") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.Default.ArrowBack, contentDescription = "Volver")
@@ -79,12 +83,53 @@ fun MedicationDetailScreen(
                         .padding(16.dp)
                         .verticalScroll(rememberScrollState()),
                 ) {
+                    val (name, detail) = MedicationNames.split(medication.nombre)
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        MedicationThumbnail(fotoUrl = medication.fotoUrl, modifier = Modifier.padding(end = 12.dp))
-                        Column {
-                            Text(medication.nombre, style = MaterialTheme.typography.titleLarge)
-                            medication.labtitular?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
-                            medication.dosis?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
+                        MedicationThumbnail(
+                            fotoUrl = medication.fotoUrl,
+                            seed = medication.nregistro,
+                            modifier = Modifier.padding(end = 12.dp),
+                        )
+                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Text(name, style = MaterialTheme.typography.headlineSmall)
+                            detail?.let {
+                                Text(
+                                    it,
+                                    style = MaterialTheme.typography.bodySmall.copy(fontFamily = DmMono),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            // La dosis de CIMA suele repetir la del nombre; solo se enseña si añade algo.
+                            medication.dosis?.takeIf { detail?.contains(it, ignoreCase = true) != true }?.let(MedicationNames::detail)?.let {
+                                Text(
+                                    it,
+                                    style = MaterialTheme.typography.bodySmall.copy(fontFamily = DmMono),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            medication.labtitular?.let {
+                                Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                    }
+
+                    // El aviso va lo primero y en coral lleno: es lo único de la ficha que no se
+                    // puede pasar por alto.
+                    if (uiState.matches.isNotEmpty()) {
+                        Card(
+                            modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.tertiary,
+                                contentColor = MaterialTheme.colorScheme.onTertiary,
+                            ),
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Text("Desrecomendado", style = MaterialTheme.typography.headlineSmall)
+                                Text("Contiene algo a lo que eres alérgico:", style = MaterialTheme.typography.bodyMedium)
+                                uiState.matches.forEach {
+                                    Text("• ${it.descripcion}", style = MaterialTheme.typography.bodyMedium)
+                                }
+                            }
                         }
                     }
 
@@ -95,27 +140,6 @@ fun MedicationDetailScreen(
                             style = MaterialTheme.typography.bodySmall,
                             modifier = Modifier.padding(top = 4.dp),
                         )
-                    }
-
-                    if (uiState.matches.isNotEmpty()) {
-                        Card(
-                            modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
-                        ) {
-                            Column(modifier = Modifier.padding(12.dp)) {
-                                Text(
-                                    "Desrecomendado",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    color = MaterialTheme.colorScheme.onErrorContainer,
-                                )
-                                uiState.matches.forEach {
-                                    Text(
-                                        "• ${it.descripcion}",
-                                        color = MaterialTheme.colorScheme.onErrorContainer,
-                                    )
-                                }
-                            }
-                        }
                     }
 
                     Text(
@@ -182,11 +206,11 @@ fun MedicationDetailScreen(
                             modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
                         )
                     }
-                    OutlinedButton(
+                    SecondaryButton(
                         onClick = { onCreateReminder(medication) },
                         modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
                     ) {
-                        Text("Crear recordatorio")
+                        Text("Crear pauta")
                     }
                 }
             }

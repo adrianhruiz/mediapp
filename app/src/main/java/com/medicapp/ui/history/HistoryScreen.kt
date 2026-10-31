@@ -43,10 +43,13 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.medicapp.model.CustomMedication
 import com.medicapp.model.Reason
 import com.medicapp.model.TakenEntry
+import com.medicapp.ui.components.MedicationNames
 import com.medicapp.ui.components.MedicationThumbnail
 import com.medicapp.ui.components.OnBottomReached
+import com.medicapp.ui.theme.DmMono
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -177,11 +180,13 @@ private fun HistoryEntryCard(
     onEdit: () -> Unit,
     onDelete: () -> Unit,
 ) {
+    val (name, detail) = MedicationNames.split(entry.nombreMedicamento)
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(enabled = entry.nregistro.isNotBlank(), onClick = onOpen)
-            .semantics { contentDescription = "Ver ficha de ${entry.nombreMedicamento}" },
+            // Los medicamentos propios no están en CIMA: no hay ficha que abrir.
+            .clickable(enabled = entry.nregistro.isNotBlank() && !CustomMedication.isCustom(entry.nregistro), onClick = onOpen)
+            .semantics { contentDescription = "Ver ficha de $name" },
     ) {
         Row(
             modifier = Modifier
@@ -190,16 +195,31 @@ private fun HistoryEntryCard(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            MedicationThumbnail(fotoUrl = entry.fotoUrl, modifier = Modifier.padding(end = 12.dp))
-            Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
-                Text(entry.nombreMedicamento, style = MaterialTheme.typography.titleMedium)
-                Text(entry.reasonNombre, style = MaterialTheme.typography.bodyMedium)
+            MedicationThumbnail(
+                fotoUrl = entry.fotoUrl,
+                seed = entry.nregistro,
+                modifier = Modifier.padding(end = 12.dp),
+            )
+            Column(modifier = Modifier.weight(1f).padding(end = 8.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(name, style = MaterialTheme.typography.titleMedium)
+                detail?.let {
+                    Text(
+                        it,
+                        style = MaterialTheme.typography.bodySmall.copy(fontFamily = DmMono),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Text("Para: ${entry.reasonNombre}", style = MaterialTheme.typography.bodyMedium)
                 val formattedDate = remember(entry.timestampMillis) {
                     Instant.ofEpochMilli(entry.timestampMillis)
                         .atZone(ZoneId.systemDefault())
                         .format(formatter)
                 }
-                Text(formattedDate, style = MaterialTheme.typography.bodySmall)
+                Text(
+                    formattedDate,
+                    style = MaterialTheme.typography.bodySmall.copy(fontFamily = DmMono),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
             Row {
                 IconButton(onClick = onEdit) {
