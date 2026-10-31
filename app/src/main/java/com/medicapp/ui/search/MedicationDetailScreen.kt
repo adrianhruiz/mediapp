@@ -1,5 +1,6 @@
 package com.medicapp.ui.search
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -7,6 +8,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -26,6 +29,10 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -33,6 +40,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import kotlinx.coroutines.launch
 import com.medicapp.ui.components.GelButton
 import com.medicapp.model.AllergyMatch
 import com.medicapp.model.AllergyType
@@ -43,7 +51,7 @@ import com.medicapp.ui.components.Eyebrow
 import com.medicapp.ui.components.MedicationNames
 import com.medicapp.ui.components.MedicationThumbnail
 import com.medicapp.ui.components.SecondaryButton
-import com.medicapp.ui.components.WarningLabel
+import com.medicapp.ui.components.StatusSeal
 import com.medicapp.ui.theme.DmMono
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -55,6 +63,10 @@ fun MedicationDetailScreen(
     viewModel: MedicationDetailViewModel = viewModel(factory = MedicationDetailViewModel.Factory),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val scope = rememberCoroutineScope()
+    // Tocar una alergia del aviso baja hasta la sección donde está su chip.
+    val ingredientsSection = remember { BringIntoViewRequester() }
+    val familiesSection = remember { BringIntoViewRequester() }
 
     Scaffold(
         containerColor = Color.Transparent,
@@ -120,13 +132,18 @@ fun MedicationDetailScreen(
                         }
                     }
 
-                    // El aviso va lo primero, como la etiqueta que la farmacia pega en la caja: es lo
-                    // único de la ficha que no se puede pasar por alto.
+                    // El aviso va lo primero y con la misma forma de lista agrupada que el resto de
+                    // la ficha: el coral se queda en el sello, los iconos y un fondo suave.
                     if (uiState.matches.isNotEmpty()) {
-                        WarningLabel(
-                            eyebrow = "Aviso de alergia",
-                            title = "Desrecomendado",
-                            rows = uiState.matches.map(::labelRow),
+                        AllergyWarning(
+                            matches = uiState.matches,
+                            onMatchClick = { match ->
+                                val section = when (match.allergy.tipo) {
+                                    AllergyType.PRINCIPIO_ACTIVO -> ingredientsSection
+                                    AllergyType.FAMILIA -> familiesSection
+                                }
+                                scope.launch { section.bringIntoView() }
+                            },
                             modifier = Modifier.padding(top = 16.dp),
                         )
                     }
@@ -156,7 +173,9 @@ fun MedicationDetailScreen(
                     Text(
                         "Componentes activos",
                         style = MaterialTheme.typography.titleMedium,
-                        modifier = Modifier.padding(top = 24.dp, bottom = 4.dp),
+                        modifier = Modifier
+                            .bringIntoViewRequester(ingredientsSection)
+                            .padding(top = 24.dp, bottom = 4.dp),
                     )
                     Text(
                         "Toca un componente para marcar o quitar la alergia",
@@ -184,7 +203,9 @@ fun MedicationDetailScreen(
                     Text(
                         "Familias (código ATC)",
                         style = MaterialTheme.typography.titleMedium,
-                        modifier = Modifier.padding(top = 24.dp, bottom = 8.dp),
+                        modifier = Modifier
+                            .bringIntoViewRequester(familiesSection)
+                            .padding(top = 24.dp, bottom = 8.dp),
                     )
                     medication.atcs.forEach { atc ->
                         val isAllergic = uiState.allergies.any {
@@ -231,14 +252,62 @@ private fun allergyChipColors() = FilterChipDefaults.filterChipColors(
     selectedLeadingIconColor = MaterialTheme.colorScheme.onTertiaryContainer,
 )
 
-/** Lo que causa el aviso y de dónde sale, para una fila de la etiqueta. */
-private fun labelRow(match: AllergyMatch): Pair<String, String> {
+/**
+ * Aviso de desrecomendado: una lista agrupada cuya primera fila, en coral suave, dice qué pasa,
+ * y una fila por cada alergia que lo causa con su origen (principio activo o familia ATC).
+ */
+@Composable
+private fun AllergyWarning(
+    matches: List<AllergyMatch>,
+    onMatchClick: (AllergyMatch) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val ink = MaterialTheme.colorScheme.onTertiaryContainer
+    Column(modifier = modifier) {
+        Eyebrow("Alergias", color = ink, modifier = Modifier.padding(start = 4.dp, bottom = 6.dp))
+        GroupedList {
+            GroupedRow(modifier = Modifier.background(warningLead)) {
+                StatusSeal(Icons.Default.Warning, description = "Alerta", tint = MaterialTheme.colorScheme.error)
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(
+                        "Desrecomendado para ti",
+                        style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
+                        color = ink,
+                    )
+                    Text("No se puede añadir al historial", style = MaterialTheme.typography.bodySmall, color = warningInkMuted)
+                }
+            }
+            matches.forEach { match ->
+                val (cause, source) = warningRow(match)
+                GroupedRow(divider = true, onClick = { onMatchClick(match) }) {
+                    Icon(Icons.Default.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.tertiary)
+                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text(cause, style = MaterialTheme.typography.bodyLarge)
+                        Text(
+                            source,
+                            style = MaterialTheme.typography.bodySmall.copy(fontFamily = DmMono),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+// Fondo de la fila de cabecera del aviso: un coral apenas tintado, con el mismo degradado
+// vertical que las filas en relieve.
+private val warningLead = Brush.verticalGradient(listOf(Color(0xFFFFF4F3), Color(0xFFFFE7E4)))
+private val warningInkMuted = Color(0xFF9A4A43)
+
+/** Lo que causa el aviso y de dónde sale, para una fila del aviso. */
+private fun warningRow(match: AllergyMatch): Pair<String, String> {
     val allergy = match.allergy
     return when (allergy.tipo) {
         AllergyType.PRINCIPIO_ACTIVO ->
-            (allergy.principioActivoNombre?.let(MedicationNames::pretty) ?: match.descripcion) to "principio activo"
+            (allergy.principioActivoNombre?.let(MedicationNames::pretty) ?: match.descripcion) to "Principio activo"
         AllergyType.FAMILIA ->
             (allergy.atcNombre?.let(MedicationNames::pretty) ?: match.descripcion) to
-                listOfNotNull("familia", allergy.atcCodigo).joinToString(" · ")
+                listOfNotNull("Familia", allergy.atcCodigo).joinToString(" · ")
     }
 }

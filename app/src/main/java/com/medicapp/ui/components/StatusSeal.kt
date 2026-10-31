@@ -25,9 +25,10 @@ private val sealInk = Color(0xFF1E2531)
 /**
  * Sello de estado que se pega en la esquina de [MedicationThumbnail]. Solo lleva icono, así que
  * [description] es lo que lee TalkBack: sin ella el estado no existiría para quien no ve la foto.
+ * [tint] cambia el color del icono cuando el sello avisa de algo.
  */
 @Composable
-fun StatusSeal(icon: ImageVector, description: String, modifier: Modifier = Modifier) {
+fun StatusSeal(icon: ImageVector, description: String, modifier: Modifier = Modifier, tint: Color = sealInk) {
     Box(
         modifier = modifier
             .size(20.dp)
@@ -37,6 +38,6 @@ fun StatusSeal(icon: ImageVector, description: String, modifier: Modifier = Modi
             .semantics { contentDescription = description },
         contentAlignment = Alignment.Center,
     ) {
-        Icon(icon, contentDescription = null, tint = sealInk, modifier = Modifier.size(12.dp))
+        Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(12.dp))
     }
 }
