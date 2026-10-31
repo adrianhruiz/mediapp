@@ -1,5 +1,6 @@
 package com.medicapp.ui.search
 
+import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -77,9 +78,11 @@ class MedicationDetailScreenTest {
             ),
         )
 
-        composeRule.onNodeWithText("Desrecomendado").assertExists()
-        composeRule.onNodeWithText("Paracetamol").assertExists()
-        composeRule.onNodeWithText("principio activo").assertExists()
+        composeRule.onNodeWithText("Desrecomendado para ti").assertExists()
+        composeRule.onNodeWithText("No se puede añadir al historial").assertExists()
+        // Cada alergia es una fila que lleva hasta su chip.
+        composeRule.onNodeWithText("Paracetamol").assertHasClickAction()
+        composeRule.onNodeWithText("Principio activo").assertExists()
         composeRule.onNodeWithText("Añadir al historial").assertIsNotEnabled()
         // El motivo ya está en la etiqueta: no se repite bajo el botón.
         composeRule.onNodeWithText("No puedes añadirlo", substring = true).assertDoesNotExist()
@@ -92,7 +95,7 @@ class MedicationDetailScreenTest {
         )
 
         composeRule.onNodeWithText("Analgésicos").assertExists()
-        composeRule.onNodeWithText("familia · N02B").assertExists()
+        composeRule.onNodeWithText("Familia · N02B").assertExists()
         composeRule.onNodeWithText("Añadir al historial").assertIsNotEnabled()
     }
 
