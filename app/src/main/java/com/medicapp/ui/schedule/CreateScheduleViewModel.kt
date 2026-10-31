@@ -23,17 +23,29 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
+/** Frecuencias de un toque en el control «8 h · 12 h · 24 h · Otra»; el resto se escribe con «Otra». */
+val QUICK_INTERVAL_HOURS: List<Int> = listOf(8, 12, 24)
+
 data class CreateScheduleUiState(
     val nregistro: String = "",
     val nombreMedicamento: String = "",
     /** Cantidad del intervalo tal y como se teclea; con [intervalUnit] se convierte a horas. */
     val intervalAmountInput: String = "1",
     val intervalUnit: DoseInterval.Unit = DoseInterval.Unit.DAYS,
-    val totalDosesInput: String = "1",
-    /** Pauta sin fin: no pide total y dura hasta que se cierre. */
+    /** Pauta sin fin: no pide duración y dura hasta que se cierre. */
     val openEnded: Boolean = false,
+    /** «Otra» en el control de frecuencia: solo entonces se enseña el campo cantidad + unidad. */
+    val isCustomInterval: Boolean = false,
+    /** «Durante N días»; el total de tomas se deriva de aquí con [ScheduleDuration]. */
+    val days: Int = 1,
+    /**
+     * Total con el que llega la pauta que se edita. Se respeta tal cual hasta que se toca la
+     * frecuencia o la duración: así editar solo el motivo no cambia el número de tomas.
+     */
+    val loadedTotalDoses: Int? = null,
     val reasonInput: String = "",
-    val suggestions: List<Reason> = emptyList(),
+    /** Motivos ya usados, para elegirlos como chips sin escribirlos. */
+    val reasons: List<Reason> = emptyList(),
     val startAtMillis: Long = System.currentTimeMillis(),
     val isSaved: Boolean = false,
     val needsExactAlarmPermission: Boolean = false,
@@ -52,9 +64,14 @@ data class CreateScheduleUiState(
         get() = intervalAmountInput.toIntOrNull()
             ?.takeIf { it > 0 }
             ?.let { DoseInterval.toHours(it, intervalUnit) }
-}
 
-private const val MAX_SUGGESTIONS = 5
+    /** Lo que se guarda en la pauta: días × tomas al día, o nada si el intervalo no vale. */
+    val totalDoses: Int?
+        get() = loadedTotalDoses ?: intervalHours?.let { ScheduleDuration.totalDoses(days, it) }
+
+    val canSave: Boolean
+        get() = reasonInput.isNotBlank() && totalDoses != null && !hasDuplicateActiveSchedule
+}
 
 /**
  * Crea una pauta o, si llega `scheduleId`, edita una existente: mismo formulario, con los
@@ -72,13 +89,8 @@ class CreateScheduleViewModel(
     private val nombreArg: String? = savedStateHandle["nombre"]
     private val fotoUrlArg: String? = savedStateHandle["fotoUrl"]
 
-    private var allReasons: List<Reason> = emptyList()
-
     /** Evita lanzar dos ediciones con un doble toque en Guardar. */
     private var isSavingEdit = false
-
-    /** Motivo con el que llega la pauta editada: no tiene sentido sugerirlo de vuelta. */
-    private var loadedReason: String? = null
 
     private val _uiState = MutableStateFlow(
         CreateScheduleUiState(
@@ -93,8 +105,7 @@ class CreateScheduleViewModel(
     init {
         viewModelScope.launch {
             reasonRepository.getAll().collect { reasons ->
-                allReasons = reasons
-                recomputeSuggestions()
+                _uiState.update { it.copy(reasons = reasons) }
             }
         }
         if (scheduleIdArg != null) {
@@ -118,7 +129,6 @@ class CreateScheduleViewModel(
         val nextDoseAt = doses
             .filter { it.status == DoseStatus.PENDING && it.scheduledAtMillis >= currentTime }
             .minOfOrNull { it.scheduledAtMillis } ?: currentTime
-        loadedReason = schedule.reasonNombre
         val (intervalAmount, intervalUnit) = DoseInterval.split(schedule.intervalHours)
         val keptDoseCount = ScheduleEditPlanner.keptDoseCount(doses)
         _uiState.update {
@@ -127,65 +137,63 @@ class CreateScheduleViewModel(
                 nombreMedicamento = schedule.nombreMedicamento,
                 intervalAmountInput = intervalAmount.toString(),
                 intervalUnit = intervalUnit,
-                // Una sin fin no tiene total: si se pasa a total fijo, se propone el mínimo válido.
-                totalDosesInput = if (schedule.openEnded) {
-                    (keptDoseCount + 1).toString()
-                } else {
-                    schedule.totalDoses.toString()
-                },
                 openEnded = schedule.openEnded,
+                // Una frecuencia que no está en el control rápido se enseña abierta en «Otra».
+                isCustomInterval = schedule.intervalHours !in QUICK_INTERVAL_HOURS,
+                // Una sin fin guarda 0 tomas: si se pasa a duración fija, se parte de un día.
+                days = if (schedule.openEnded) 1 else ScheduleDuration.days(schedule.totalDoses, schedule.intervalHours),
+                loadedTotalDoses = schedule.totalDoses.takeUnless { schedule.openEnded },
                 reasonInput = schedule.reasonNombre,
                 startAtMillis = nextDoseAt,
                 keptDoseCount = keptDoseCount,
             )
         }
-        recomputeSuggestions()
-    }
-
-    private fun recomputeSuggestions() {
-        val query = _uiState.value.reasonInput.trim()
-        val filtered = if (query == loadedReason) {
-            emptyList()
-        } else if (query.isBlank()) {
-            allReasons
-        } else {
-            allReasons.filter { it.nombre.contains(query, ignoreCase = true) }
-        }
-        _uiState.update { it.copy(suggestions = filtered.take(MAX_SUGGESTIONS)) }
     }
 
     fun onIntervalPresetSelected(hours: Int) {
         val (amount, unit) = DoseInterval.split(hours)
-        _uiState.update { it.copy(intervalAmountInput = amount.toString(), intervalUnit = unit) }
+        _uiState.update {
+            it.copy(intervalAmountInput = amount.toString(), intervalUnit = unit, isCustomInterval = false)
+                .withRecomputedTotal()
+        }
+    }
+
+    /** «Otra»: deja el intervalo actual como punto de partida para editarlo a mano. */
+    fun onCustomIntervalSelected() {
+        _uiState.update { it.copy(isCustomInterval = true) }
     }
 
     fun onIntervalAmountChanged(value: String) {
         if (value.isEmpty() || value.all { it.isDigit() }) {
-            _uiState.update { it.copy(intervalAmountInput = value) }
+            _uiState.update { it.copy(intervalAmountInput = value).withRecomputedTotal() }
         }
     }
 
     fun onIntervalUnitChanged(unit: DoseInterval.Unit) {
-        _uiState.update { it.copy(intervalUnit = unit) }
+        _uiState.update { it.copy(intervalUnit = unit).withRecomputedTotal() }
     }
 
-    fun onTotalDosesChanged(value: String) {
-        if (value.isEmpty() || value.all { it.isDigit() }) {
-            _uiState.update { it.copy(totalDosesInput = value, totalBelowTaken = false) }
-        }
+    fun incrementDays() {
+        _uiState.update { it.copy(days = (it.days + 1).coerceAtMost(ScheduleDuration.MAX_DAYS)).withRecomputedTotal() }
     }
 
     fun onOpenEndedChanged(openEnded: Boolean) {
         _uiState.update { it.copy(openEnded = openEnded, totalBelowTaken = false) }
     }
 
-    fun onReasonInputChanged(newValue: String) {
-        _uiState.update { it.copy(reasonInput = newValue) }
-        recomputeSuggestions()
+    fun decrementDays() {
+        _uiState.update { it.copy(days = (it.days - 1).coerceAtLeast(1)).withRecomputedTotal() }
     }
 
-    fun onSuggestionSelected(reason: Reason) {
-        _uiState.update { it.copy(reasonInput = reason.nombre, suggestions = emptyList()) }
+    /** Tocar frecuencia o duración vuelve a calcular el total y retira el aviso de total bajo. */
+    private fun CreateScheduleUiState.withRecomputedTotal() = copy(loadedTotalDoses = null, totalBelowTaken = false)
+
+    fun onReasonInputChanged(newValue: String) {
+        _uiState.update { it.copy(reasonInput = newValue) }
+    }
+
+    fun onReasonSelected(reason: Reason) {
+        _uiState.update { it.copy(reasonInput = reason.nombre) }
     }
 
     fun onStartAtChanged(millis: Long) {
@@ -198,16 +206,13 @@ class CreateScheduleViewModel(
 
     fun save(context: Context) {
         val state = _uiState.value
+        if (!state.canSave) return
         val intervalHours = state.intervalHours ?: return
-        if (state.reasonInput.isBlank() || state.hasDuplicateActiveSchedule) return
         // Sin fin no hay total que validar: el repositorio lo guarda como 0.
-        val totalDoses = if (state.openEnded) 0 else state.totalDosesInput.toIntOrNull() ?: return
-        if (!state.openEnded) {
-            if (totalDoses < 1) return
-            if (totalDoses <= state.keptDoseCount) {
-                _uiState.update { it.copy(totalBelowTaken = true) }
-                return
-            }
+        val totalDoses = if (state.openEnded) 0 else state.totalDoses ?: return
+        if (!state.openEnded && totalDoses <= state.keptDoseCount) {
+            _uiState.update { it.copy(totalBelowTaken = true) }
+            return
         }
 
         if (!DoseAlarmScheduler.canScheduleExactAlarms(context)) {

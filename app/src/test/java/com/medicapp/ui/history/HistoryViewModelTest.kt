@@ -91,18 +91,22 @@ class HistoryViewModelTest {
     }
 
     @Test
-    fun `deleting an entry removes it from the list`() = runTest(dispatcher) {
-        val historyRepository = FakeMedicationHistoryRepository(
-            listOf(entry("1", "Ibuprofeno", "r1", "Dolor de cabeza")),
+    fun `tapping the selected reason chip again shows every reason`() = runTest(dispatcher) {
+        val entries = listOf(
+            entry("1", "Ibuprofeno", "r1", "Dolor de cabeza"),
+            entry("2", "Paracetamol", "r2", "Fiebre"),
         )
-        val viewModel = HistoryViewModel(historyRepository, FakeReasonRepository())
+        val viewModel = HistoryViewModel(FakeMedicationHistoryRepository(entries), FakeReasonRepository())
         val collectorJob = launch { viewModel.entries.collect {} }
         runCurrent()
 
-        viewModel.delete(historyRepository.entries.single())
-        advanceUntilIdle()
+        viewModel.onReasonChipClicked("r2")
+        runCurrent()
+        assertEquals(listOf("Paracetamol"), viewModel.entries.value.map { it.nombreMedicamento })
 
-        assertTrue(viewModel.entries.value.isEmpty())
+        viewModel.onReasonChipClicked("r2")
+        runCurrent()
+        assertEquals(2, viewModel.entries.value.size)
         collectorJob.cancel()
     }
 

@@ -4,6 +4,7 @@ import androidx.lifecycle.SavedStateHandle
 import com.medicapp.data.repository.FakeReasonRepository
 import com.medicapp.data.repository.FakeScheduleRepository
 import com.medicapp.domain.DoseInterval
+import com.medicapp.model.Reason
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -169,9 +170,116 @@ class CreateScheduleViewModelTest {
         assertEquals(24, viewModel.uiState.value.intervalHours)
     }
 
-    private fun newViewModel(): CreateScheduleViewModel {
+    @Test
+    fun `total doses come from the days and the preset interval`() = runTest(dispatcher) {
+        val viewModel = newViewModel()
+
+        viewModel.onIntervalPresetSelected(8)
+        repeat(6) { viewModel.incrementDays() }
+
+        assertEquals(7, viewModel.uiState.value.days)
+        assertEquals(21, viewModel.uiState.value.totalDoses)
+    }
+
+    @Test
+    fun `days never go below one`() = runTest(dispatcher) {
+        val viewModel = newViewModel()
+
+        viewModel.decrementDays()
+
+        assertEquals(1, viewModel.uiState.value.days)
+    }
+
+    @Test
+    fun `choosing Otra keeps the interval editable and uses it for the total`() = runTest(dispatcher) {
+        val viewModel = newViewModel()
+
+        viewModel.onCustomIntervalSelected()
+        viewModel.onIntervalAmountChanged("10")
+        viewModel.onIntervalUnitChanged(DoseInterval.Unit.HOURS)
+        viewModel.incrementDays()
+
+        assertTrue(viewModel.uiState.value.isCustomInterval)
+        assertEquals(5, viewModel.uiState.value.totalDoses)
+    }
+
+    @Test
+    fun `Otra also takes days and weeks for the total`() = runTest(dispatcher) {
+        val viewModel = newViewModel()
+
+        viewModel.onCustomIntervalSelected()
+        viewModel.onIntervalAmountChanged("1")
+        viewModel.onIntervalUnitChanged(DoseInterval.Unit.WEEKS)
+        repeat(13) { viewModel.incrementDays() }
+
+        // 14 días con una toma semanal: la del día 0 y la del día 7.
+        assertEquals(14, viewModel.uiState.value.days)
+        assertEquals(2, viewModel.uiState.value.totalDoses)
+    }
+
+    @Test
+    fun `a preset clears Otra`() = runTest(dispatcher) {
+        val viewModel = newViewModel()
+
+        viewModel.onCustomIntervalSelected()
+        viewModel.onIntervalPresetSelected(12)
+
+        assertFalse(viewModel.uiState.value.isCustomInterval)
+        assertEquals("12", viewModel.uiState.value.intervalAmountInput)
+        assertEquals(DoseInterval.Unit.HOURS, viewModel.uiState.value.intervalUnit)
+    }
+
+    @Test
+    fun `cannot save without a reason or without a valid interval`() = runTest(dispatcher) {
+        val viewModel = newViewModel()
+
+        assertFalse(viewModel.uiState.value.canSave)
+        viewModel.onReasonInputChanged("Dolor")
+        assertTrue(viewModel.uiState.value.canSave)
+        viewModel.onCustomIntervalSelected()
+        viewModel.onIntervalAmountChanged("")
+        assertFalse(viewModel.uiState.value.canSave)
+        viewModel.onIntervalAmountChanged("0")
+        assertFalse(viewModel.uiState.value.canSave)
+    }
+
+    @Test
+    fun `cannot save while another active schedule exists for the medication`() = runTest(dispatcher) {
+        val scheduleRepository = FakeScheduleRepository()
+        scheduleRepository.createSchedule(
+            nregistro = "1",
+            nombreMedicamento = "Ibuprofeno",
+            fotoUrl = null,
+            intervalHours = 24,
+            totalDoses = 1,
+            startAtMillis = 0L,
+            reasonId = "r1",
+            reasonNombre = "Dolor",
+        )
+        val viewModel = newViewModel(scheduleRepository)
+
+        viewModel.onReasonInputChanged("Dolor")
+
+        assertFalse(viewModel.uiState.value.canSave)
+    }
+
+    @Test
+    fun `tapping a reason chip fills the reason`() = runTest(dispatcher) {
         val viewModel = CreateScheduleViewModel(
             FakeScheduleRepository(),
+            FakeReasonRepository(initialReasons = listOf(Reason(id = "r1", nombre = "Alergia"))),
+            SavedStateHandle(mapOf("nregistro" to "1", "nombre" to "Ibuprofeno")),
+        )
+        advanceUntilIdle()
+
+        viewModel.onReasonSelected(viewModel.uiState.value.reasons.single())
+
+        assertEquals("Alergia", viewModel.uiState.value.reasonInput)
+    }
+
+    private fun newViewModel(scheduleRepository: FakeScheduleRepository = FakeScheduleRepository()): CreateScheduleViewModel {
+        val viewModel = CreateScheduleViewModel(
+            scheduleRepository,
             FakeReasonRepository(),
             SavedStateHandle(mapOf("nregistro" to "1", "nombre" to "Ibuprofeno")),
         )
