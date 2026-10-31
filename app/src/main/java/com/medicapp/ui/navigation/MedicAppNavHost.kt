@@ -159,6 +159,12 @@ private fun MainNavHost(startDestination: String, initialScheduleId: String?, on
                     onOpenDetail = { medication ->
                         navController.navigate("medicationDetail/${encode(medication.nregistro)}")
                     },
+                    onAddCustomToHistory = { nregistro, nombre ->
+                        navController.navigate("addEdit?nregistro=${encode(nregistro)}&nombre=${encode(nombre)}")
+                    },
+                    onCreateCustomReminder = { nregistro, nombre ->
+                        navController.navigate("createSchedule?nregistro=${encode(nregistro)}&nombre=${encode(nombre)}")
+                    },
                 )
             }
             composable(

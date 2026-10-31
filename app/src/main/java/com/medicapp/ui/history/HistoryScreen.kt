@@ -43,6 +43,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.medicapp.model.CustomMedication
 import com.medicapp.model.Reason
 import com.medicapp.model.TakenEntry
 import com.medicapp.ui.components.MedicationNames
@@ -183,7 +184,8 @@ private fun HistoryEntryCard(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(enabled = entry.nregistro.isNotBlank(), onClick = onOpen)
+            // Los medicamentos propios no están en CIMA: no hay ficha que abrir.
+            .clickable(enabled = entry.nregistro.isNotBlank() && !CustomMedication.isCustom(entry.nregistro), onClick = onOpen)
             .semantics { contentDescription = "Ver ficha de $name" },
     ) {
         Row(
