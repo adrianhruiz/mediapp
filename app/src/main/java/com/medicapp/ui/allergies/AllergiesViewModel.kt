@@ -14,6 +14,8 @@ import com.medicapp.model.AllergyType
 import com.medicapp.model.AtcCode
 import com.medicapp.model.PrincipioActivo
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -28,20 +30,19 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.io.IOException
 
-enum class AllergySearchMode { PRINCIPIO_ACTIVO, FAMILIA }
-
 sealed interface CatalogSearchUiState {
     data object Idle : CatalogSearchUiState
     data object Loading : CatalogSearchUiState
     data object Empty : CatalogSearchUiState
     data class Error(val message: String) : CatalogSearchUiState
-    data class IngredientResults(
-        val items: List<PrincipioActivo>,
-        val isFromCache: Boolean = false,
-    ) : CatalogSearchUiState
 
-    data class FamilyResults(
-        val items: List<AtcCode>,
+    /**
+     * Una sola búsqueda en las dos maestras: el usuario no elige si busca un componente o una
+     * familia, el tipo de alergia lo dice el propio resultado.
+     */
+    data class Results(
+        val ingredients: List<PrincipioActivo>,
+        val families: List<AtcCode>,
         val isFromCache: Boolean = false,
     ) : CatalogSearchUiState
 }
@@ -54,17 +55,14 @@ class AllergiesViewModel(
     val allergies: StateFlow<List<Allergy>> = allergyRepository.getAll()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    private val _searchMode = MutableStateFlow(AllergySearchMode.PRINCIPIO_ACTIVO)
-    val searchMode: StateFlow<AllergySearchMode> = _searchMode.asStateFlow()
-
     private val _query = MutableStateFlow("")
     val query: StateFlow<String> = _query.asStateFlow()
 
     @OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
     val searchState: StateFlow<CatalogSearchUiState> =
-        combine(_query.debounce(350), _searchMode) { text, mode -> text to mode }
+        _query.debounce(350)
             .distinctUntilChanged()
-            .flatMapLatest { (text, mode) ->
+            .flatMapLatest { text ->
                 flow {
                     if (text.isBlank()) {
                         emit(CatalogSearchUiState.Idle)
@@ -72,28 +70,22 @@ class AllergiesViewModel(
                     }
                     emit(CatalogSearchUiState.Loading)
                     try {
-                        when (mode) {
-                            AllergySearchMode.PRINCIPIO_ACTIVO -> {
-                                val result = catalogRepository.searchPrincipiosActivos(text)
-                                emit(
-                                    if (result.items.isEmpty()) {
-                                        CatalogSearchUiState.Empty
-                                    } else {
-                                        CatalogSearchUiState.IngredientResults(result.items, result.isFromCache)
-                                    },
-                                )
-                            }
-                            AllergySearchMode.FAMILIA -> {
-                                val result = catalogRepository.searchAtcCodes(text)
-                                emit(
-                                    if (result.items.isEmpty()) {
-                                        CatalogSearchUiState.Empty
-                                    } else {
-                                        CatalogSearchUiState.FamilyResults(result.items, result.isFromCache)
-                                    },
-                                )
-                            }
+                        val (ingredients, families) = coroutineScope {
+                            val ingredients = async { catalogRepository.searchPrincipiosActivos(text) }
+                            val families = async { catalogRepository.searchAtcCodes(text) }
+                            ingredients.await() to families.await()
                         }
+                        emit(
+                            if (ingredients.items.isEmpty() && families.items.isEmpty()) {
+                                CatalogSearchUiState.Empty
+                            } else {
+                                CatalogSearchUiState.Results(
+                                    ingredients = ingredients.items,
+                                    families = families.items,
+                                    isFromCache = ingredients.isFromCache || families.isFromCache,
+                                )
+                            },
+                        )
                     } catch (e: CimaUnavailableException) {
                         emit(
                             CatalogSearchUiState.Error(
@@ -112,16 +104,12 @@ class AllergiesViewModel(
 
     /** Cuántos resultados de la búsqueda actual todavía no están marcados como alergia. */
     val addableResultCount: StateFlow<Int> = combine(searchState, allergies) { state, _ ->
-        when (state) {
-            is CatalogSearchUiState.IngredientResults -> state.items.count { !isIngredientAdded(it) }
-            is CatalogSearchUiState.FamilyResults -> state.items.count { !isFamilyAdded(it) }
-            else -> 0
+        if (state is CatalogSearchUiState.Results) {
+            state.ingredients.count { !isIngredientAdded(it) } + state.families.count { !isFamilyAdded(it) }
+        } else {
+            0
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
-
-    fun onSearchModeChanged(mode: AllergySearchMode) {
-        _searchMode.value = mode
-    }
 
     fun onQueryChanged(newQuery: String) {
         _query.value = newQuery
@@ -137,16 +125,17 @@ class AllergiesViewModel(
         viewModelScope.launch { allergyRepository.addFamilia(atc.codigo, atc.nombre) }
     }
 
-    /** Todas de una vez: una escritura para la lista entera, no una por resultado. */
+    /**
+     * Todas de una vez: una escritura por tipo para la lista entera, no una por resultado. Si un
+     * tipo no tiene nada nuevo, no se escribe.
+     */
     fun addAllSearchResults() {
-        when (val state = searchState.value) {
-            is CatalogSearchUiState.IngredientResults -> viewModelScope.launch {
-                allergyRepository.addPrincipiosActivos(state.items.filterNot { isIngredientAdded(it) })
-            }
-            is CatalogSearchUiState.FamilyResults -> viewModelScope.launch {
-                allergyRepository.addFamilias(state.items.filterNot { isFamilyAdded(it) })
-            }
-            else -> Unit
+        val state = searchState.value as? CatalogSearchUiState.Results ?: return
+        val ingredients = state.ingredients.filterNot { isIngredientAdded(it) }
+        val families = state.families.filterNot { isFamilyAdded(it) }
+        viewModelScope.launch {
+            if (ingredients.isNotEmpty()) allergyRepository.addPrincipiosActivos(ingredients)
+            if (families.isNotEmpty()) allergyRepository.addFamilias(families)
         }
     }
 

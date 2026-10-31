@@ -11,21 +11,14 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.EventNote
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -40,14 +33,15 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.medicapp.ui.components.GelButton
 import com.medicapp.ui.components.GelTone
 import com.medicapp.model.DoseStatus
-import com.medicapp.ui.backup.BackupMenu
+import com.medicapp.ui.backup.SettingsButton
+import com.medicapp.ui.components.GroupedList
+import com.medicapp.ui.components.GroupedRow
 import com.medicapp.ui.components.BlisterCell
 import com.medicapp.ui.components.DoseCellState
 import com.medicapp.ui.components.Eyebrow
@@ -127,7 +121,6 @@ fun TodayScreen(
                     nowMillis = state.nowMillis,
                     doseCount = plan.doses.size,
                     loading = state.loading,
-                    onOpenReminders = onOpenReminders,
                     snackbarHostState = snackbarHostState,
                     onLogout = onLogout,
                 )
@@ -176,10 +169,7 @@ fun TodayScreen(
                             )
                         }
                     }
-                    item { Eyebrow("Todas las tomas de hoy") }
-                    items(plan.doses, key = { it.dose.id }) { dose ->
-                        DoseRow(dose = dose, selected = dose == selected, onClick = { selectedId = dose.dose.id })
-                    }
+                    item { MyRoutinesRow(onOpenReminders) }
                 }
             }
         }
@@ -192,7 +182,6 @@ private fun TodayHeader(
     nowMillis: Long,
     doseCount: Int,
     loading: Boolean,
-    onOpenReminders: () -> Unit,
     snackbarHostState: SnackbarHostState,
     onLogout: () -> Unit,
 ) {
@@ -209,10 +198,7 @@ private fun TodayHeader(
                 style = MaterialTheme.typography.headlineMedium,
             )
         }
-        IconButton(onClick = onOpenReminders) {
-            Icon(Icons.Default.EventNote, contentDescription = "Pautas y recordatorios")
-        }
-        BackupMenu(snackbarHostState = snackbarHostState, onLogout = onLogout)
+        SettingsButton(snackbarHostState = snackbarHostState, onLogout = onLogout)
     }
 }
 
@@ -282,55 +268,28 @@ private fun DoseCard(dose: TodayDose, nowMillis: Long, onMarkTaken: () -> Unit) 
     }
 }
 
+/** Las pautas, como fila de lista bajo la tarjeta: sustituye al icono de calendario. */
 @Composable
-private fun DoseRow(dose: TodayDose, selected: Boolean, onClick: () -> Unit) {
-    val (name, _) = MedicationNames.split(dose.schedule.nombreMedicamento)
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .semantics { this.selected = selected }
-            .padding(vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        Text(
-            dose.dose.scheduledAtMillis.hour(),
-            style = MaterialTheme.typography.bodyMedium.copy(fontFamily = DmMono),
-            modifier = Modifier.width(48.dp),
-        )
-        Text(
-            name,
-            style = MaterialTheme.typography.bodyLarge,
-            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f),
-        )
-        Text(
-            dose.statusText(),
-            style = MaterialTheme.typography.labelMedium,
-            color = if (dose.overdue) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+private fun MyRoutinesRow(onOpenReminders: () -> Unit) {
+    GroupedList {
+        GroupedRow(onClick = onOpenReminders) {
+            Text("Mis pautas", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+        }
     }
 }
 
+/** Sin tomas: el título ya dice «Hoy, sin tomas», así que aquí solo va qué hacer. */
 @Composable
 private fun EmptyToday(onSearch: () -> Unit, onOpenReminders: () -> Unit) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("Hoy no tienes tomas", style = MaterialTheme.typography.titleLarge)
-            Text(
-                "Las tomas salen de tus pautas. Busca un medicamento y crea una pauta desde su ficha.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            GelButton(onClick = onSearch, modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
-                Text("Buscar medicamento")
-            }
-            TextButton(onClick = onOpenReminders, modifier = Modifier.fillMaxWidth()) {
-                Text("Ver mis pautas")
-            }
+    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Text(
+            "Las tomas salen de tus pautas. Busca un medicamento y crea una pauta desde su ficha.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        GelButton(onClick = onSearch, modifier = Modifier.fillMaxWidth()) {
+            Text("Buscar medicamento")
         }
+        MyRoutinesRow(onOpenReminders)
     }
 }

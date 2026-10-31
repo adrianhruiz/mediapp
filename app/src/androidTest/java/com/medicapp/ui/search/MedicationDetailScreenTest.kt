@@ -91,6 +91,17 @@ class MedicationDetailScreenTest {
     }
 
     @Test
+    fun familyAllergiesStayReachableInsideMoreInformation() {
+        setContent(emptyList())
+        composeRule.onNodeWithText("N02BE01").assertDoesNotExist()
+
+        composeRule.onNodeWithText("Más información").performClick()
+        composeRule.onNodeWithText("N02BE01").performClick()
+
+        composeRule.onNodeWithText("Añadir al historial").assertIsNotEnabled()
+    }
+
+    @Test
     fun aMedicationAlreadyInTheHistoryShowsTheAddedBadge() {
         val history = FakeMedicationHistoryRepository(
             listOf(
@@ -124,7 +135,8 @@ class MedicationDetailScreenTest {
         setContent(emptyList())
         composeRule.onNodeWithText("Añadir al historial").assertIsEnabled()
 
-        composeRule.onNodeWithText("PARACETAMOL").performClick()
+        // Cada componente es una fila con interruptor «Alérgico»; tocar la fila lo activa.
+        composeRule.onNodeWithText("Paracetamol").performClick()
 
         composeRule.onNodeWithText("Añadir al historial").assertIsNotEnabled()
     }

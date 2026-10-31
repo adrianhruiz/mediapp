@@ -2,7 +2,9 @@ package com.medicapp.ui.allergies
 
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.onAllNodesWithContentDescription
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -45,31 +47,57 @@ class AllergiesScreenTest {
         }
     }
 
+    /** El buscador vive en la hoja «Añadir alergia»; no hay que elegir el tipo antes. */
+    private fun openAddSheetAndSearch(text: String) {
+        composeRule.onNodeWithText("Añadir alergia").performClick()
+        composeRule.onNode(hasSetTextAction()).performTextInput(text)
+    }
+
+    @Test
+    fun deletingTakesTwoStepsFromEditMode() {
+        val repository = FakeAllergyRepository(
+            listOf(Allergy(id = "1", tipo = AllergyType.FAMILIA, atcCodigo = "J01C", atcNombre = "Penicilinas")),
+        )
+        val viewModel = AllergiesViewModel(repository, MedicationCatalogRepository(FakeCimaApiService()))
+        composeRule.setContent {
+            MedicAppTheme { AllergiesScreen(contentPadding = PaddingValues(), viewModel = viewModel) }
+        }
+
+        composeRule.onNodeWithText("FAMILIAS ATC · 1").assertExists()
+        composeRule.onNodeWithContentDescription("Quitar alergia").assertDoesNotExist()
+
+        composeRule.onNodeWithText("Editar").performClick()
+        composeRule.onNodeWithContentDescription("Quitar alergia").performClick()
+        composeRule.onNodeWithText("Eliminar").performClick()
+
+        composeRule.waitUntil(5_000) {
+            composeRule.onAllNodesWithText("J01C").fetchSemanticsNodes().isEmpty()
+        }
+    }
+
     @Test
     fun anAllergyAlreadyMarkedIsFlaggedInTheSearchResults() {
         setContent(
             listOf(Allergy(id = "1", tipo = AllergyType.FAMILIA, atcCodigo = "J01C", atcNombre = "Penicilinas")),
         )
 
-        composeRule.onNodeWithText("Familia (ATC)").performClick()
-        composeRule.onNodeWithText("Buscar familia (ej. Penicilina)").performTextInput("penicilina")
+        openAddSheetAndSearch("penicilina")
         composeRule.waitUntil(5_000) {
-            composeRule.onAllNodesWithText("Ya añadida").fetchSemanticsNodes().isNotEmpty()
+            composeRule.onAllNodesWithContentDescription("Ya añadida").fetchSemanticsNodes().isNotEmpty()
         }
 
-        composeRule.onNodeWithText("Ya añadida").assertExists()
+        composeRule.onNodeWithContentDescription("Ya añadida").assertExists()
     }
 
     @Test
     fun anAllergyNotMarkedYetOffersTheAddAction() {
         setContent(emptyList())
 
-        composeRule.onNodeWithText("Familia (ATC)").performClick()
-        composeRule.onNodeWithText("Buscar familia (ej. Penicilina)").performTextInput("penicilina")
+        openAddSheetAndSearch("penicilina")
         composeRule.waitUntil(5_000) {
             composeRule.onAllNodesWithContentDescription("Añadir alergia").fetchSemanticsNodes().isNotEmpty()
         }
 
-        composeRule.onNodeWithText("Ya añadida").assertDoesNotExist()
+        composeRule.onNodeWithContentDescription("Ya añadida").assertDoesNotExist()
     }
 }
