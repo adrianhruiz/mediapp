@@ -11,6 +11,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -36,7 +37,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.medicapp.ui.components.GelButton
 import com.medicapp.model.AllergyType
 import com.medicapp.model.MedicationDetail
-import com.medicapp.ui.components.AddedChip
+import com.medicapp.ui.components.GroupedList
+import com.medicapp.ui.components.GroupedRow
 import com.medicapp.ui.components.Eyebrow
 import com.medicapp.ui.components.MedicationNames
 import com.medicapp.ui.components.MedicationThumbnail
@@ -137,13 +139,26 @@ fun MedicationDetailScreen(
                         }
                     }
 
+                    // El estado va como una fila de lista agrupada, no como chip: un chip gris con
+                    // icono se lee como un botón apagado al lado de los botones gel de verdad.
                     if (uiState.isInHistory) {
-                        AddedChip("Ya en tu historial", modifier = Modifier.padding(top = 12.dp))
-                        Text(
-                            "Motivos registrados: ${uiState.historyReasons.joinToString()}",
-                            style = MaterialTheme.typography.bodySmall,
-                            modifier = Modifier.padding(top = 4.dp),
-                        )
+                        GroupedList(modifier = Modifier.padding(top = 16.dp)) {
+                            GroupedRow {
+                                Icon(
+                                    Icons.Default.Check,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                    Text("Ya en tu historial", style = MaterialTheme.typography.bodyLarge)
+                                    Text(
+                                        "Motivos: ${uiState.historyReasons.joinToString()}",
+                                        style = MaterialTheme.typography.bodySmall.copy(fontFamily = DmMono),
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                            }
+                        }
                     }
 
                     Text(

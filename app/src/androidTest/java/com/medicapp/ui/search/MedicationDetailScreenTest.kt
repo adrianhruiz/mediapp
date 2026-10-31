@@ -109,7 +109,7 @@ class MedicationDetailScreenTest {
         setContent(allergies = emptyList(), history = history)
 
         composeRule.onNodeWithText("Ya en tu historial").assertExists()
-        composeRule.onNodeWithText("Motivos registrados: Fiebre").assertExists()
+        composeRule.onNodeWithText("Motivos: Fiebre").assertExists()
     }
 
     @Test
