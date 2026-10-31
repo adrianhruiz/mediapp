@@ -5,6 +5,7 @@ import com.medicapp.data.remote.dto.MaestraItemDto
 import com.medicapp.data.remote.dto.MaestrasResponseDto
 import com.medicapp.data.repository.FakeAllergyRepository
 import com.medicapp.data.repository.MedicationCatalogRepository
+import com.medicapp.model.AllergyType
 import com.medicapp.model.AtcCode
 import com.medicapp.model.PrincipioActivo
 import kotlinx.coroutines.Dispatchers
@@ -52,15 +53,80 @@ class AllergiesViewModelTest {
         )
         val collectorJob = launch { viewModel.searchState.collect {} }
 
-        viewModel.onSearchModeChanged(AllergySearchMode.FAMILIA)
         viewModel.onQueryChanged("penicilina")
         advanceTimeBy(400)
         runCurrent()
 
         val state = viewModel.searchState.value
-        assertTrue(state is CatalogSearchUiState.FamilyResults)
-        assertEquals("J01C", (state as CatalogSearchUiState.FamilyResults).items.first().codigo)
+        assertTrue(state is CatalogSearchUiState.Results)
+        assertEquals("J01C", (state as CatalogSearchUiState.Results).families.first().codigo)
         collectorJob.cancel()
+    }
+
+    @Test
+    fun `one search brings ingredients and families together, each with its own type`() = runTest(dispatcher) {
+        // El catálogo de componentes solo trae los que tienen id y el de familias los que tienen
+        // código: así se ve que cada resultado sale de su maestra sin que el usuario elija tipo.
+        val response = MaestrasResponseDto(
+            totalFilas = 2,
+            pagina = 1,
+            tamanioPagina = 200,
+            resultados = listOf(
+                MaestraItemDto(id = 7, nombre = "Amoxicilina"),
+                MaestraItemDto(codigo = "J01C", nombre = "Penicilinas"),
+            ),
+        )
+        val viewModel = AllergiesViewModel(
+            FakeAllergyRepository(),
+            MedicationCatalogRepository(FakeCimaApiService(maestrasResponse = response)),
+        )
+        val collectorJob = launch { viewModel.searchState.collect {} }
+
+        viewModel.onQueryChanged("penicilina")
+        advanceTimeBy(400)
+        runCurrent()
+
+        val state = viewModel.searchState.value as CatalogSearchUiState.Results
+        assertEquals(listOf(7), state.ingredients.map { it.id })
+        assertEquals(listOf("J01C"), state.families.map { it.codigo })
+        collectorJob.cancel()
+    }
+
+    @Test
+    fun `adding all search results marks ingredients and families alike`() = runTest(dispatcher) {
+        val response = MaestrasResponseDto(
+            totalFilas = 2,
+            pagina = 1,
+            tamanioPagina = 200,
+            resultados = listOf(
+                MaestraItemDto(id = 7, nombre = "Amoxicilina"),
+                MaestraItemDto(codigo = "J01C", nombre = "Penicilinas"),
+            ),
+        )
+        val viewModel = AllergiesViewModel(
+            FakeAllergyRepository(),
+            MedicationCatalogRepository(FakeCimaApiService(maestrasResponse = response)),
+        )
+        val searchJob = launch { viewModel.searchState.collect {} }
+        val allergiesJob = launch { viewModel.allergies.collect {} }
+        val countJob = launch { viewModel.addableResultCount.collect {} }
+
+        viewModel.onQueryChanged("penicilina")
+        advanceTimeBy(400)
+        runCurrent()
+        assertEquals(2, viewModel.addableResultCount.value)
+
+        viewModel.addAllSearchResults()
+        advanceUntilIdle()
+
+        assertEquals(
+            setOf(AllergyType.PRINCIPIO_ACTIVO, AllergyType.FAMILIA),
+            viewModel.allergies.value.map { it.tipo }.toSet(),
+        )
+        assertEquals(0, viewModel.addableResultCount.value)
+        searchJob.cancel()
+        allergiesJob.cancel()
+        countJob.cancel()
     }
 
     @Test
@@ -130,7 +196,6 @@ class AllergiesViewModelTest {
         val searchJob = launch { viewModel.searchState.collect {} }
         val allergiesJob = launch { viewModel.allergies.collect {} }
 
-        viewModel.onSearchModeChanged(AllergySearchMode.FAMILIA)
         viewModel.onQueryChanged("penicilina")
         advanceTimeBy(400)
         runCurrent()
@@ -167,7 +232,6 @@ class AllergiesViewModelTest {
         viewModel.addFamilyAllergy(AtcCode(codigo = "J01C", nombre = "Penicilinas", nivel = 3))
         advanceUntilIdle()
 
-        viewModel.onSearchModeChanged(AllergySearchMode.FAMILIA)
         viewModel.onQueryChanged("penicilina")
         advanceTimeBy(400)
         runCurrent()
@@ -203,7 +267,6 @@ class AllergiesViewModelTest {
         val searchJob = launch { viewModel.searchState.collect {} }
         val allergiesJob = launch { viewModel.allergies.collect {} }
 
-        viewModel.onSearchModeChanged(AllergySearchMode.FAMILIA)
         viewModel.onQueryChanged("penicilina")
         advanceTimeBy(400)
         runCurrent()
@@ -289,7 +352,6 @@ class AllergiesViewModelTest {
         val allergiesJob = launch { viewModel.allergies.collect {} }
         val countJob = launch { viewModel.addableResultCount.collect {} }
 
-        viewModel.onSearchModeChanged(AllergySearchMode.FAMILIA)
         viewModel.onQueryChanged("penicilina")
         advanceTimeBy(400)
         runCurrent()

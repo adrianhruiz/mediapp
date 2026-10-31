@@ -1,11 +1,11 @@
 package com.medicapp.ui.search
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -13,16 +13,13 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material.icons.filled.Bookmark
-import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -33,18 +30,21 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.medicapp.model.CustomMedication
 import com.medicapp.model.Medication
-import com.medicapp.ui.components.AddedChip
-import com.medicapp.ui.components.MedicationNames
+import com.medicapp.ui.components.GroupedList
+import com.medicapp.ui.components.GroupedRow
 import com.medicapp.ui.components.MedicationThumbnail
 import com.medicapp.ui.components.ScreenHeader
 import com.medicapp.ui.components.SearchHelpButton
 import com.medicapp.ui.theme.DmMono
+
+private val quietTint = Color(0xFF9AA2AE)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -84,13 +84,11 @@ fun SearchScreen(
             .padding(horizontal = 16.dp)
             .padding(top = 8.dp),
     ) {
-        ScreenHeader(title = "Buscar", eyebrow = "Medicamentos de CIMA · AEMPS", modifier = Modifier.padding(bottom = 12.dp))
-        OutlinedTextField(
+        ScreenHeader(title = "Buscar", modifier = Modifier.padding(bottom = 12.dp))
+        CapsuleSearchField(
             value = query,
             onValueChange = viewModel::onQueryChanged,
-            modifier = Modifier.fillMaxWidth(),
-            label = { Text("Buscar medicamento") },
-            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+            placeholder = "Ej: Xazal, Ibuprofeno 600",
             trailingIcon = {
                 SearchHelpButton(
                     title = "¿Qué puedo buscar aquí?",
@@ -98,14 +96,13 @@ fun SearchScreen(
                     examples = listOf("Xazal", "Paracetamol", "Ibuprofeno 600 mg"),
                 )
             },
-            supportingText = { Text("Nombre comercial o principio activo. Ej: Xazal, Ibuprofeno") },
-            singleLine = true,
         )
 
-        androidx.compose.foundation.layout.Spacer(modifier = Modifier.padding(top = 8.dp))
+        Spacer(modifier = Modifier.padding(top = 8.dp))
 
         when (val state = uiState) {
-            is SearchUiState.Idle -> HintMessage("Escribe el nombre de un medicamento para buscar")
+            // El ejemplo ya está en el placeholder: sin texto fijo mientras no se escribe.
+            is SearchUiState.Idle -> Unit
             is SearchUiState.Loading -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator()
             }
@@ -125,7 +122,7 @@ fun SearchScreen(
                         modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
                     )
                 }
-                LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(bottom = 16.dp)) {
                     if (state.totalFilas > state.results.size) {
                         item {
                             Text(
@@ -134,13 +131,19 @@ fun SearchScreen(
                             )
                         }
                     }
-                    items(state.results, key = { it.nregistro }) { medication ->
-                        MedicationResultCard(
-                            medication = medication,
-                            isSaved = medication.nregistro in savedNregistros,
-                            isInHistory = medication.nregistro in historyNregistros,
-                            onClick = { onOpenDetail(medication) },
-                        )
+                    // Una sola lista agrupada: CIMA devuelve una página corta, así que va en un item.
+                    item(key = "results") {
+                        GroupedList {
+                            state.results.forEachIndexed { index, medication ->
+                                MedicationResultRow(
+                                    medication = medication,
+                                    divider = index > 0,
+                                    isSaved = medication.nregistro in savedNregistros,
+                                    isInHistory = medication.nregistro in historyNregistros,
+                                    onClick = { onOpenDetail(medication) },
+                                )
+                            }
+                        }
                     }
                     item(key = "custom") {
                         CustomMedicationCard(query = query, onClick = openCustomDraft)
@@ -154,17 +157,9 @@ fun SearchScreen(
 /** Salida para lo que CIMA no tiene: una pomada, un remedio sin registro... */
 @Composable
 private fun CustomMedicationCard(query: String, onClick: () -> Unit) {
-    OutlinedCard(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp)
-            .clickable(onClick = onClick),
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.padding(end = 12.dp))
+    GroupedList(modifier = Modifier.padding(vertical = 4.dp)) {
+        GroupedRow(onClick = onClick) {
+            Icon(Icons.Default.Add, contentDescription = null)
             Column(modifier = Modifier.weight(1f)) {
                 Text("¿No está en la lista?", style = MaterialTheme.typography.titleSmall)
                 Text(
@@ -227,59 +222,32 @@ private fun HintMessage(text: String) {
     }
 }
 
+/**
+ * Resultado: foto, nombre y «dosis · forma». El laboratorio va en la ficha. Lo que ya tienes se
+ * marca con iconos grises, sin coral: no pide atención.
+ */
 @Composable
-private fun MedicationResultCard(
+private fun MedicationResultRow(
     medication: Medication,
+    divider: Boolean,
     isSaved: Boolean,
     isInHistory: Boolean,
     onClick: () -> Unit,
 ) {
-    Card(modifier = Modifier.fillMaxWidth().clickable(onClick = onClick)) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            MedicationThumbnail(
-                fotoUrl = medication.fotoUrl,
-                seed = medication.nregistro,
-                modifier = Modifier.padding(end = 12.dp),
-            )
-            val (name, detail) = MedicationNames.split(medication.nombre)
-            Column(modifier = Modifier.weight(1f).padding(end = 8.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(name, style = MaterialTheme.typography.titleMedium)
-                detail?.let {
-                    Text(
-                        it,
-                        style = MaterialTheme.typography.bodySmall.copy(fontFamily = DmMono),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                // La dosis de CIMA suele repetir la del nombre; solo se enseña si añade algo.
-                medication.dosis?.takeIf { detail?.contains(it, ignoreCase = true) != true }?.let(MedicationNames::detail)?.let {
-                    Text(
-                        it,
-                        style = MaterialTheme.typography.bodySmall.copy(fontFamily = DmMono),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                medication.labtitular?.let {
-                    Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-                if (isInHistory) {
-                    AddedChip("Ya en tu historial", modifier = Modifier.padding(top = 4.dp))
-                }
-                if (isSaved) {
-                    AddedChip(
-                        "Ya lo tienes guardado",
-                        icon = Icons.Default.Bookmark,
-                        modifier = Modifier.padding(top = 4.dp),
-                    )
-                }
+    GroupedRow(divider = divider, onClick = onClick) {
+        MedicationThumbnail(fotoUrl = medication.fotoUrl, seed = medication.nregistro)
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            val (name, detail) = nameAndPresentation(medication.nombre, medication.dosis)
+            Text(name, style = MaterialTheme.typography.titleMedium)
+            detail?.let {
+                Text(
+                    it,
+                    style = MaterialTheme.typography.bodySmall.copy(fontFamily = DmMono),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
-            Icon(Icons.Default.ArrowForward, contentDescription = null)
         }
+        if (isSaved) Icon(Icons.Default.Bookmark, contentDescription = "Con pauta activa", tint = quietTint)
+        if (isInHistory) Icon(Icons.Default.Check, contentDescription = "En tu historial", tint = quietTint)
     }
 }
