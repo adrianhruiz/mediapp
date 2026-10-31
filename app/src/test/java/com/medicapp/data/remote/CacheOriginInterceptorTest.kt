@@ -50,7 +50,9 @@ class CacheOriginInterceptorTest {
     }
 
     @Test
-    fun `tags a response served straight from the cache`() {
+    fun `does not tag a fresh cache hit served while online`() {
+        // Volver a la pestaña de Buscar repite la búsqueda y OkHttp la sirve de la caché de
+        // disco sin tocar la red porque aún no ha caducado. Eso no es estar sin acceso a CIMA.
         val client = buildClient()
         server.enqueue(
             MockResponse()
@@ -60,10 +62,54 @@ class CacheOriginInterceptorTest {
         client.newCall(request()).execute().use { it.body.string() }
 
         client.newCall(request()).execute().use { response ->
-            assertNotNull(response.header(HEADER_SERVED_FROM_CACHE))
+            assertNull(response.header(HEADER_SERVED_FROM_CACHE))
             assertEquals("""{"value":1}""", response.body.string())
         }
 
         assertEquals("la segunda no ha tocado la red", 1, server.requestCount)
+    }
+
+    @Test
+    fun `tags a response served from the cache by the offline fallback`() {
+        val cacheDir = tempFolder.newFolder()
+        var online = true
+        val client = OkHttpClient.Builder()
+            .cache(Cache(cacheDir, 10L * 1024 * 1024))
+            .addInterceptor(OfflineFallbackInterceptor(isOnline = { online }))
+            .addInterceptor(CacheOriginInterceptor())
+            .build()
+        server.enqueue(
+            MockResponse()
+                .setHeader("Cache-Control", "public, max-age=600")
+                .setBody("""{"value":1}"""),
+        )
+        client.newCall(request()).execute().use { it.body.string() }
+
+        online = false
+        client.newCall(request()).execute().use { response ->
+            assertNotNull(response.header(HEADER_SERVED_FROM_CACHE))
+            assertEquals("""{"value":1}""", response.body.string())
+        }
+    }
+
+    @Test
+    fun `tags a response served from the cache while the circuit is open`() {
+        val breaker = CimaCircuitBreaker()
+        val client = OkHttpClient.Builder()
+            .cache(Cache(tempFolder.newFolder(), 10L * 1024 * 1024))
+            .addInterceptor(CircuitBreakerInterceptor(breaker, isOnline = { true }))
+            .addInterceptor(CacheOriginInterceptor())
+            .build()
+        server.enqueue(
+            MockResponse()
+                .setHeader("Cache-Control", "public, max-age=600")
+                .setBody("""{"value":1}"""),
+        )
+        client.newCall(request()).execute().use { it.body.string() }
+
+        repeat(10) { breaker.recordFailure() }
+        client.newCall(request()).execute().use { response ->
+            assertNotNull(response.header(HEADER_SERVED_FROM_CACHE))
+        }
     }
 }
