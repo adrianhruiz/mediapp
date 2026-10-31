@@ -13,11 +13,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -35,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.medicapp.ui.components.GelButton
+import com.medicapp.model.AllergyMatch
 import com.medicapp.model.AllergyType
 import com.medicapp.model.MedicationDetail
 import com.medicapp.ui.components.GroupedList
@@ -43,6 +43,7 @@ import com.medicapp.ui.components.Eyebrow
 import com.medicapp.ui.components.MedicationNames
 import com.medicapp.ui.components.MedicationThumbnail
 import com.medicapp.ui.components.SecondaryButton
+import com.medicapp.ui.components.WarningLabel
 import com.medicapp.ui.theme.DmMono
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -119,24 +120,15 @@ fun MedicationDetailScreen(
                         }
                     }
 
-                    // El aviso va lo primero y en coral lleno: es lo único de la ficha que no se
-                    // puede pasar por alto.
+                    // El aviso va lo primero, como la etiqueta que la farmacia pega en la caja: es lo
+                    // único de la ficha que no se puede pasar por alto.
                     if (uiState.matches.isNotEmpty()) {
-                        Card(
-                            modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
-                            colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.tertiary,
-                                contentColor = MaterialTheme.colorScheme.onTertiary,
-                            ),
-                        ) {
-                            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                Text("Desrecomendado", style = MaterialTheme.typography.headlineSmall)
-                                Text("Contiene algo a lo que eres alérgico:", style = MaterialTheme.typography.bodyMedium)
-                                uiState.matches.forEach {
-                                    Text("• ${it.descripcion}", style = MaterialTheme.typography.bodyMedium)
-                                }
-                            }
-                        }
+                        WarningLabel(
+                            eyebrow = "Aviso de alergia",
+                            title = "Desrecomendado",
+                            rows = uiState.matches.map(::labelRow),
+                            modifier = Modifier.padding(top = 16.dp),
+                        )
                     }
 
                     // El estado va como una fila de lista agrupada, no como chip: un chip gris con
@@ -184,6 +176,7 @@ fun MedicationDetailScreen(
                             } else {
                                 null
                             },
+                            colors = allergyChipColors(),
                             modifier = Modifier.padding(vertical = 4.dp),
                         )
                     }
@@ -206,6 +199,7 @@ fun MedicationDetailScreen(
                             } else {
                                 null
                             },
+                            colors = allergyChipColors(),
                             modifier = Modifier.padding(vertical = 4.dp),
                         )
                     }
@@ -217,14 +211,6 @@ fun MedicationDetailScreen(
                     ) {
                         Text("Añadir al historial")
                     }
-                    if (!uiState.canAddToHistory) {
-                        Text(
-                            "No puedes añadirlo al historial: está desrecomendado por tus alergias.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.error,
-                            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                        )
-                    }
                     SecondaryButton(
                         onClick = { onCreateReminder(medication) },
                         modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
@@ -234,5 +220,25 @@ fun MedicationDetailScreen(
                 }
             }
         }
+    }
+}
+
+/** Un chip marcado como alergia es justo lo que causa la etiqueta: lleva su mismo coral. */
+@Composable
+private fun allergyChipColors() = FilterChipDefaults.filterChipColors(
+    selectedContainerColor = MaterialTheme.colorScheme.tertiaryContainer,
+    selectedLabelColor = MaterialTheme.colorScheme.onTertiaryContainer,
+    selectedLeadingIconColor = MaterialTheme.colorScheme.onTertiaryContainer,
+)
+
+/** Lo que causa el aviso y de dónde sale, para una fila de la etiqueta. */
+private fun labelRow(match: AllergyMatch): Pair<String, String> {
+    val allergy = match.allergy
+    return when (allergy.tipo) {
+        AllergyType.PRINCIPIO_ACTIVO ->
+            (allergy.principioActivoNombre?.let(MedicationNames::pretty) ?: match.descripcion) to "principio activo"
+        AllergyType.FAMILIA ->
+            (allergy.atcNombre?.let(MedicationNames::pretty) ?: match.descripcion) to
+                listOfNotNull("familia", allergy.atcCodigo).joinToString(" · ")
     }
 }
