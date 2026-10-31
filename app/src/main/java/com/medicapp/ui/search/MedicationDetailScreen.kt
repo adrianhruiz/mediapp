@@ -42,7 +42,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.launch
 import com.medicapp.ui.components.GelButton
-import com.medicapp.model.AllergyMatch
 import com.medicapp.model.AllergyType
 import com.medicapp.model.MedicationDetail
 import com.medicapp.ui.components.GroupedList
@@ -136,11 +135,13 @@ fun MedicationDetailScreen(
                     // la ficha: el coral se queda en el sello, los iconos y un fondo suave.
                     if (uiState.matches.isNotEmpty()) {
                         AllergyWarning(
-                            matches = uiState.matches,
-                            onMatchClick = { match ->
-                                val section = when (match.allergy.tipo) {
-                                    AllergyType.PRINCIPIO_ACTIVO -> ingredientsSection
-                                    AllergyType.FAMILIA -> familiesSection
+                            count = uiState.matches.size,
+                            // Baja hasta el primer chip que causa el aviso: componentes antes que familias.
+                            onClick = {
+                                val section = if (uiState.matches.any { it.allergy.tipo == AllergyType.PRINCIPIO_ACTIVO }) {
+                                    ingredientsSection
+                                } else {
+                                    familiesSection
                                 }
                                 scope.launch { section.bringIntoView() }
                             },
@@ -253,20 +254,20 @@ private fun allergyChipColors() = FilterChipDefaults.filterChipColors(
 )
 
 /**
- * Aviso de desrecomendado: una lista agrupada cuya primera fila, en coral suave, dice qué pasa,
- * y una fila por cada alergia que lo causa con su origen (principio activo o familia ATC).
+ * Aviso de desrecomendado: una sola fila de lista agrupada, en coral suave. No repite el nombre
+ * de la alergia, que ya está en su chip marcado más abajo; tocarla lleva hasta él.
  */
 @Composable
 private fun AllergyWarning(
-    matches: List<AllergyMatch>,
-    onMatchClick: (AllergyMatch) -> Unit,
+    count: Int,
+    onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val ink = MaterialTheme.colorScheme.onTertiaryContainer
     Column(modifier = modifier) {
         Eyebrow("Alergias", color = ink, modifier = Modifier.padding(start = 4.dp, bottom = 6.dp))
         GroupedList {
-            GroupedRow(modifier = Modifier.background(warningLead)) {
+            GroupedRow(modifier = Modifier.background(warningLead), onClick = onClick) {
                 StatusSeal(Icons.Default.Warning, description = "Alerta", tint = MaterialTheme.colorScheme.error)
                 Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text(
@@ -274,40 +275,18 @@ private fun AllergyWarning(
                         style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
                         color = ink,
                     )
-                    Text("No se puede añadir al historial", style = MaterialTheme.typography.bodySmall, color = warningInkMuted)
-                }
-            }
-            matches.forEach { match ->
-                val (cause, source) = warningRow(match)
-                GroupedRow(divider = true, onClick = { onMatchClick(match) }) {
-                    Icon(Icons.Default.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.tertiary)
-                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        Text(cause, style = MaterialTheme.typography.bodyLarge)
-                        Text(
-                            source,
-                            style = MaterialTheme.typography.bodySmall.copy(fontFamily = DmMono),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
+                    Text(
+                        if (count == 1) "Por una alergia marcada abajo" else "Por $count alergias marcadas abajo",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = warningInkMuted,
+                    )
                 }
             }
         }
     }
 }
 
-// Fondo de la fila de cabecera del aviso: un coral apenas tintado, con el mismo degradado
-// vertical que las filas en relieve.
+// Fondo de la fila del aviso: un coral apenas tintado, con el mismo degradado vertical que las
+// filas en relieve.
 private val warningLead = Brush.verticalGradient(listOf(Color(0xFFFFF4F3), Color(0xFFFFE7E4)))
 private val warningInkMuted = Color(0xFF9A4A43)
-
-/** Lo que causa el aviso y de dónde sale, para una fila del aviso. */
-private fun warningRow(match: AllergyMatch): Pair<String, String> {
-    val allergy = match.allergy
-    return when (allergy.tipo) {
-        AllergyType.PRINCIPIO_ACTIVO ->
-            (allergy.principioActivoNombre?.let(MedicationNames::pretty) ?: match.descripcion) to "Principio activo"
-        AllergyType.FAMILIA ->
-            (allergy.atcNombre?.let(MedicationNames::pretty) ?: match.descripcion) to
-                listOfNotNull("Familia", allergy.atcCodigo).joinToString(" · ")
-    }
-}
