@@ -1,6 +1,7 @@
 package com.medicapp.ui.history
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,31 +13,21 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenuAnchorType
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
@@ -46,6 +37,9 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.medicapp.model.CustomMedication
 import com.medicapp.model.Reason
 import com.medicapp.model.TakenEntry
+import com.medicapp.ui.components.GroupHeader
+import com.medicapp.ui.components.GroupedList
+import com.medicapp.ui.components.GroupedRow
 import com.medicapp.ui.components.MedicationNames
 import com.medicapp.ui.components.MedicationThumbnail
 import com.medicapp.ui.components.OnBottomReached
@@ -53,8 +47,12 @@ import com.medicapp.ui.theme.DmMono
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.util.Locale
 
-@OptIn(ExperimentalMaterial3Api::class)
+/**
+ * Lista de medicamentos tomados, agrupada por mes. Tocar una entrada la abre para editar su
+ * motivo o borrarla; la miniatura abre la ficha del medicamento cuando la hay.
+ */
 @Composable
 fun HistoryScreen(
     contentPadding: PaddingValues,
@@ -69,7 +67,7 @@ fun HistoryScreen(
     val hasAnyEntries by viewModel.hasAnyEntries.collectAsStateWithLifecycle()
     val hasMore by viewModel.hasMore.collectAsStateWithLifecycle()
     val isOffline by viewModel.isOffline.collectAsStateWithLifecycle()
-    var entryPendingDelete by remember { mutableStateOf<TakenEntry?>(null) }
+    val months = remember(entries) { HistoryMonths.group(entries) }
     val listState = rememberLazyListState()
     listState.OnBottomReached(onLoadMore = viewModel::loadMore)
 
@@ -84,15 +82,16 @@ fun HistoryScreen(
                 value = query,
                 onValueChange = viewModel::onQueryChanged,
                 modifier = Modifier.fillMaxWidth(),
-                label = { Text("Buscar por medicamento o motivo") },
+                placeholder = { Text("Buscar por medicamento o motivo") },
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                 singleLine = true,
             )
-            ReasonFilterDropdown(
+            ReasonChips(
                 reasons = reasons,
                 selectedReasonId = selectedReasonId,
-                onReasonSelected = viewModel::onReasonFilterChanged,
-                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                onAll = { viewModel.onReasonFilterChanged(null) },
+                onReason = viewModel::onReasonChipClicked,
+                modifier = Modifier.padding(top = 8.dp),
             )
         }
 
@@ -132,15 +131,22 @@ fun HistoryScreen(
                     .fillMaxWidth()
                     .weight(1f)
                     .padding(top = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
-                items(entries, key = { it.id }) { entry ->
-                    HistoryEntryCard(
-                        entry = entry,
-                        onOpen = { onOpenMedication(entry) },
-                        onEdit = { onEditEntry(entry) },
-                        onDelete = { entryPendingDelete = entry },
-                    )
+                items(months, key = { it.month.toString() }) { group ->
+                    Column {
+                        GroupHeader(group.label)
+                        GroupedList {
+                            group.entries.forEachIndexed { index, entry ->
+                                HistoryEntryRow(
+                                    entry = entry,
+                                    divider = index > 0,
+                                    onOpen = { onEditEntry(entry) },
+                                    onOpenMedication = { onOpenMedication(entry) },
+                                )
+                            }
+                        }
+                    }
                 }
                 if (hasMore) {
                     item {
@@ -152,124 +158,78 @@ fun HistoryScreen(
             }
         }
     }
-
-    entryPendingDelete?.let { entry ->
-        AlertDialog(
-            onDismissRequest = { entryPendingDelete = null },
-            title = { Text("Eliminar entrada") },
-            text = { Text("¿Seguro que quieres eliminar \"${entry.nombreMedicamento}\" del historial?") },
-            confirmButton = {
-                TextButton(onClick = {
-                    viewModel.delete(entry)
-                    entryPendingDelete = null
-                }) { Text("Eliminar") }
-            },
-            dismissButton = {
-                TextButton(onClick = { entryPendingDelete = null }) { Text("Cancelar") }
-            },
-        )
-    }
 }
 
-private val formatter = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm")
+private val dateFormat = DateTimeFormatter.ofPattern("d MMM · HH:mm", Locale.forLanguageTag("es-ES"))
 
 @Composable
-private fun HistoryEntryCard(
+private fun HistoryEntryRow(
     entry: TakenEntry,
+    divider: Boolean,
     onOpen: () -> Unit,
-    onEdit: () -> Unit,
-    onDelete: () -> Unit,
+    onOpenMedication: () -> Unit,
 ) {
     val (name, detail) = MedicationNames.split(entry.nombreMedicamento)
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            // Los medicamentos propios no están en CIMA: no hay ficha que abrir.
-            .clickable(enabled = entry.nregistro.isNotBlank() && !CustomMedication.isCustom(entry.nregistro), onClick = onOpen)
-            .semantics { contentDescription = "Ver ficha de $name" },
+    // Los medicamentos propios no están en CIMA: no hay ficha que abrir.
+    val hasSheet = entry.nregistro.isNotBlank() && !CustomMedication.isCustom(entry.nregistro)
+    GroupedRow(
+        divider = divider,
+        onClick = onOpen,
+        modifier = Modifier.semantics { contentDescription = "Abrir entrada de $name" },
     ) {
-        Row(
+        MedicationThumbnail(
+            fotoUrl = entry.fotoUrl,
+            seed = entry.nregistro,
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            MedicationThumbnail(
-                fotoUrl = entry.fotoUrl,
-                seed = entry.nregistro,
-                modifier = Modifier.padding(end = 12.dp),
-            )
-            Column(modifier = Modifier.weight(1f).padding(end = 8.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(name, style = MaterialTheme.typography.titleMedium)
-                detail?.let {
-                    Text(
-                        it,
-                        style = MaterialTheme.typography.bodySmall.copy(fontFamily = DmMono),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                Text("Para: ${entry.reasonNombre}", style = MaterialTheme.typography.bodyMedium)
-                val formattedDate = remember(entry.timestampMillis) {
-                    Instant.ofEpochMilli(entry.timestampMillis)
-                        .atZone(ZoneId.systemDefault())
-                        .format(formatter)
-                }
+                .clickable(enabled = hasSheet, role = Role.Button, onClick = onOpenMedication)
+                .semantics { contentDescription = "Ver ficha de $name" },
+        )
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(name, style = MaterialTheme.typography.titleMedium)
+            detail?.let {
                 Text(
-                    formattedDate,
+                    it,
                     style = MaterialTheme.typography.bodySmall.copy(fontFamily = DmMono),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            Row {
-                IconButton(onClick = onEdit) {
-                    Icon(Icons.Default.Edit, contentDescription = "Editar")
-                }
-                IconButton(onClick = onDelete) {
-                    Icon(Icons.Default.Delete, contentDescription = "Eliminar")
-                }
+            Text(entry.reasonNombre, style = MaterialTheme.typography.bodyMedium)
+            val formattedDate = remember(entry.timestampMillis) {
+                Instant.ofEpochMilli(entry.timestampMillis)
+                    .atZone(ZoneId.systemDefault())
+                    .format(dateFormat)
+                    .replace(".", "")
             }
+            Text(
+                formattedDate,
+                style = MaterialTheme.typography.bodySmall.copy(fontFamily = DmMono),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+/** Filtro por motivo en chips: «Todos» y uno por motivo; tocar el elegido lo quita. */
 @Composable
-private fun ReasonFilterDropdown(
+private fun ReasonChips(
     reasons: List<Reason>,
     selectedReasonId: String?,
-    onReasonSelected: (String?) -> Unit,
+    onAll: () -> Unit,
+    onReason: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    var expanded by remember { mutableStateOf(false) }
-    val selectedLabel = reasons.firstOrNull { it.id == selectedReasonId }?.nombre ?: "Todos los motivos"
-
-    ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = it }, modifier = modifier) {
-        OutlinedTextField(
-            value = selectedLabel,
-            onValueChange = {},
-            readOnly = true,
-            label = { Text("Filtrar por motivo") },
-            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-            modifier = Modifier.fillMaxWidth().menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable),
-        )
-        ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            DropdownMenuItem(
-                text = { Text("Todos los motivos") },
-                onClick = {
-                    onReasonSelected(null)
-                    expanded = false
-                },
+    if (reasons.isEmpty()) return
+    Row(
+        modifier = modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        FilterChip(selected = selectedReasonId == null, onClick = onAll, label = { Text("Todos") })
+        reasons.forEach { reason ->
+            FilterChip(
+                selected = reason.id == selectedReasonId,
+                onClick = { onReason(reason.id) },
+                label = { Text(reason.nombre) },
             )
-            reasons.forEach { reason ->
-                DropdownMenuItem(
-                    text = { Text(reason.nombre) },
-                    onClick = {
-                        onReasonSelected(reason.id)
-                        expanded = false
-                    },
-                )
-            }
         }
     }
 }

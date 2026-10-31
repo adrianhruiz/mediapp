@@ -1,6 +1,5 @@
 package com.medicapp.ui.schedule
 
-import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -11,7 +10,6 @@ import com.medicapp.data.repository.PagedResult
 import com.medicapp.data.repository.PagingDefaults
 import com.medicapp.data.repository.ScheduleRepository
 import com.medicapp.model.MedicationSchedule
-import com.medicapp.notifications.DoseAlarmScheduler
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -20,7 +18,6 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.launch
 
 class RemindersViewModel(
     private val scheduleRepository: ScheduleRepository,
@@ -48,16 +45,6 @@ class RemindersViewModel(
     fun loadMore() {
         if (schedulesPage.value.hasMore) {
             _limit.update { it + PagingDefaults.PAGE_INCREMENT }
-        }
-    }
-
-    fun closeSchedule(context: Context, schedule: MedicationSchedule) {
-        viewModelScope.launch {
-            val pendingDoses = scheduleRepository.getPendingDoses(schedule.id)
-            pendingDoses.forEach { dose ->
-                DoseAlarmScheduler.cancelDose(context.applicationContext, schedule.id, dose.id)
-            }
-            scheduleRepository.closeSchedule(schedule.id)
         }
     }
 

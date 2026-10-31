@@ -1,7 +1,5 @@
 package com.medicapp.ui.history
 
-import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -9,14 +7,11 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -26,8 +21,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -50,7 +43,6 @@ import java.util.Locale
 private val spanish = Locale.forLanguageTag("es-ES")
 private val dayOfMonth = DateTimeFormatter.ofPattern("d", spanish)
 private val dayAndMonth = DateTimeFormatter.ofPattern("d MMM", spanish)
-private val missedFormat = DateTimeFormatter.ofPattern("HH:mm 'del' EEEE", spanish)
 private val dayLetters = listOf("L", "M", "X", "J", "V", "S", "D")
 
 private fun weekTitle(start: LocalDate, end: LocalDate): String {
@@ -70,16 +62,7 @@ private fun WeekDose.description(): String {
     return "${DateTimeFormatter.ofPattern("HH:mm").format(time)}, $name, $status"
 }
 
-private fun summary(plan: WeekPlan): String? = when (plan.missed.size) {
-    0 -> if (plan.due > 0) "No se te ha escapado ninguna." else null
-    1 -> {
-        val at = Instant.ofEpochMilli(plan.missed.single().dose.scheduledAtMillis).atZone(ZoneId.systemDefault())
-        "Te faltó la de las ${missedFormat.format(at)}."
-    }
-    else -> "Se te escaparon ${plan.missed.size} tomas."
-}
-
-/** La semana como un blíster: una fila por día y una celda por toma. */
+/** La semana: primero el resumen, luego una tira de 7 días con una celda por toma. */
 @Composable
 fun WeekHistoryContent(
     modifier: Modifier = Modifier,
@@ -114,91 +97,66 @@ fun WeekHistoryContent(
             }
         }
 
-        FoilCard(modifier = Modifier.fillMaxWidth()) {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                plan.days.forEachIndexed { index, day -> DayRow(letter = dayLetters[index], day = day) }
+        Column(modifier = Modifier.padding(horizontal = 4.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(
+                WeekSummary.takenLabel(plan.taken, plan.due),
+                style = MaterialTheme.typography.headlineSmall,
+            )
+            // Lo único en coral de la pantalla: la cifra de tomas que se escaparon.
+            WeekSummary.missedLabel(plan.missed.size)?.let {
+                Text(it, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.tertiary)
             }
         }
 
-        Legend()
-
-        Card(modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(
-                    if (plan.due == 0) "Esta semana aún no tocaba ninguna toma" else "${plan.taken} de ${plan.due} tomas",
-                    style = MaterialTheme.typography.headlineSmall,
-                )
-                summary(plan)?.let {
-                    Text(
-                        it,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = if (plan.missed.isEmpty()) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error,
-                    )
+        FoilCard(modifier = Modifier.fillMaxWidth()) {
+            Row(modifier = Modifier.fillMaxWidth()) {
+                plan.days.forEachIndexed { index, day ->
+                    DayColumn(letter = dayLetters[index], day = day, modifier = Modifier.weight(1f))
                 }
             }
         }
     }
 }
 
+/** Un día de la tira: letra, número y sus tomas apiladas; un guion si ese día no había ninguna. */
 @Composable
-private fun DayRow(letter: String, day: WeekDay) {
-    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+private fun DayColumn(letter: String, day: WeekDay, modifier: Modifier = Modifier) {
+    val ink = if (day.isToday) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
+    val weight = if (day.isToday) FontWeight.Bold else FontWeight.Normal
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Text(letter, style = MaterialTheme.typography.labelLarge.copy(fontFamily = DmMono), fontWeight = weight, color = ink)
         Text(
-            letter,
-            style = MaterialTheme.typography.titleMedium.copy(fontFamily = DmMono),
-            fontWeight = if (day.isToday) FontWeight.Bold else FontWeight.Normal,
-            color = if (day.isToday) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.width(28.dp),
+            dayOfMonth.format(day.date),
+            style = MaterialTheme.typography.labelSmall.copy(fontFamily = DmMono),
+            fontWeight = weight,
+            color = ink,
         )
         if (day.doses.isEmpty()) {
             Text(
-                "Sin tomas",
-                style = MaterialTheme.typography.bodySmall,
+                "–",
+                style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(vertical = 18.dp),
+                modifier = Modifier
+                    .padding(vertical = 8.dp)
+                    .semantics { contentDescription = "Sin tomas" },
             )
         } else {
-            Row(modifier = Modifier.horizontalScroll(rememberScrollState())) {
-                day.doses.forEach { weekDose ->
-                    BlisterCell(
-                        state = when (weekDose.dose.status) {
-                            DoseStatus.PENDING -> DoseCellState.PENDING
-                            DoseStatus.TAKEN -> DoseCellState.TAKEN
-                            DoseStatus.SKIPPED -> DoseCellState.SKIPPED
-                        },
-                        pill = PillStyles.forMedication(weekDose.schedule.nregistro, weekDose.schedule.nombreMedicamento),
-                        width = 30.dp,
-                        highlighted = weekDose.missed,
-                        modifier = Modifier.semantics { contentDescription = weekDose.description() },
-                    )
-                }
+            day.doses.forEach { weekDose ->
+                BlisterCell(
+                    state = when (weekDose.dose.status) {
+                        DoseStatus.PENDING -> DoseCellState.PENDING
+                        DoseStatus.TAKEN -> DoseCellState.TAKEN
+                        DoseStatus.SKIPPED -> DoseCellState.SKIPPED
+                    },
+                    pill = PillStyles.forMedication(weekDose.schedule.nregistro, weekDose.schedule.nombreMedicamento),
+                    width = 20.dp,
+                    modifier = Modifier.semantics { contentDescription = weekDose.description() },
+                )
             }
         }
-    }
-}
-
-// Puntos en el color de texto secundario y no en los del aluminio: estos se perdían sobre el
-// fondo oscuro.
-@Composable
-private fun Legend() {
-    val muted = MaterialTheme.colorScheme.onSurfaceVariant
-    val coral = MaterialTheme.colorScheme.tertiary
-    Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
-        LegendItem("Tomada") { LegendDot { drawCircle(muted) } }
-        LegendItem("Sin tomar") { LegendDot { drawCircle(coral, style = Stroke(2.dp.toPx())) } }
-        LegendItem("Pendiente") { LegendDot { drawCircle(muted, style = Stroke(1.5.dp.toPx())) } }
-    }
-}
-
-@Composable
-private fun LegendDot(draw: DrawScope.() -> Unit) {
-    Canvas(Modifier.size(10.dp), onDraw = draw)
-}
-
-@Composable
-private fun LegendItem(label: String, dot: @Composable () -> Unit) {
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        dot()
-        Text(label, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }

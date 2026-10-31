@@ -22,7 +22,6 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.launch
 
 class HistoryViewModel(
     private val repository: MedicationHistoryRepository,
@@ -88,10 +87,9 @@ class HistoryViewModel(
         _selectedReasonId.value = reasonId
     }
 
-    fun delete(entry: TakenEntry) {
-        viewModelScope.launch {
-            repository.delete(entry)
-        }
+    /** Chip de motivo: lo elige o, si ya estaba elegido, vuelve a mostrar todos. */
+    fun onReasonChipClicked(reasonId: String) {
+        _selectedReasonId.update { if (it == reasonId) null else reasonId }
     }
 
     fun loadMore() {
