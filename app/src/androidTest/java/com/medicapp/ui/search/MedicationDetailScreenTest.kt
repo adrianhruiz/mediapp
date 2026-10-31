@@ -1,8 +1,13 @@
 package com.medicapp.ui.search
 
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.getOrNull
+import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -10,6 +15,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.medicapp.data.remote.FakeCimaApiService
 import com.medicapp.data.remote.dto.AtcDto
+import com.medicapp.data.remote.dto.FotoDto
 import com.medicapp.data.remote.dto.MedicamentoDetailDto
 import com.medicapp.data.remote.dto.PrincipioActivoDto
 import com.medicapp.data.repository.FakeAllergyRepository
@@ -36,9 +42,14 @@ class MedicationDetailScreenTest {
         atcs = listOf(AtcDto(codigo = "N02BE01", nombre = "Paracetamol")),
     )
 
+    private val enlargePhoto = SemanticsMatcher("click to enlarge the photo") {
+        it.config.getOrNull(SemanticsActions.OnClick)?.label == "Ampliar foto"
+    }
+
     private fun setContent(
         allergies: List<Allergy>,
         history: FakeMedicationHistoryRepository = FakeMedicationHistoryRepository(),
+        detailDto: MedicamentoDetailDto = this.detailDto,
     ) {
         val viewModel = MedicationDetailViewModel(
             MedicationCatalogRepository(FakeCimaApiService(medicamentoDetailResponse = detailDto)),
@@ -136,5 +147,30 @@ class MedicationDetailScreenTest {
         composeRule.onNodeWithText("PARACETAMOL").performClick()
 
         composeRule.onNodeWithText("Añadir al historial").assertIsNotEnabled()
+    }
+
+    @Test
+    fun tappingThePhotoOpensItFullScreenAndTheCloseButtonDismissesIt() {
+        val thumbnail = "https://cima.aemps.es/cima/fotos/thumbnails/materialas/77758/77758_materialas.jpg"
+        setContent(
+            allergies = emptyList(),
+            detailDto = detailDto.copy(fotos = listOf(FotoDto(tipo = "materialas", url = thumbnail))),
+        )
+
+        composeRule.onNodeWithTag("medicationPhotoViewer").assertDoesNotExist()
+        composeRule.onNode(enlargePhoto)
+            .performClick()
+        composeRule.onNodeWithTag("medicationPhotoViewer").assertExists()
+
+        composeRule.onNodeWithContentDescription("Cerrar foto").performClick()
+        composeRule.onNodeWithTag("medicationPhotoViewer").assertDoesNotExist()
+    }
+
+    @Test
+    fun withoutAPhotoTheThumbnailIsNotClickable() {
+        setContent(emptyList())
+
+        composeRule.onNode(enlargePhoto)
+            .assertDoesNotExist()
     }
 }
