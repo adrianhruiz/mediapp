@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Fondo del icono: el aluminio cepillado del tema Blíster (Foil), con un degradado vertical
+     y un rayado fino que imita el cepillado del metal. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <path android:pathData="M0,0h108v108h-108z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="linear"
+                android:startX="0"
+                android:startY="0"
+                android:endX="0"
+                android:endY="108"
+                android:startColor="#FBFCFD"
+                android:endColor="#D6DBE2" />
+        </aapt:attr>
+    </path>
+
+    <path
+        android:pathData="M0,0.3h108 M0,2.8h108 M0,5.1h108 M0,7.5h108 M0,9.9h108 M0,12.3h108 M0,14.7h108 M0,17.2h108 M0,19.6h108 M0,21.9h108 M0,24.4h108 M0,26.8h108 M0,29.1h108 M0,31.6h108 M0,34.0h108 M0,36.4h108 M0,38.8h108 M0,41.1h108 M0,43.5h108 M0,46.0h108 M0,48.4h108 M0,50.8h108 M0,53.1h108 M0,55.5h108 M0,57.9h108 M0,60.4h108 M0,62.8h108 M0,65.1h108 M0,67.5h108 M0,69.9h108 M0,72.3h108 M0,74.7h108 M0,77.1h108 M0,79.5h108 M0,81.9h108 M0,84.3h108 M0,86.7h108 M0,89.1h108 M0,91.5h108 M0,93.9h108 M0,96.3h108 M0,98.7h108 M0,101.1h108 M0,103.5h108 M0,105.9h108"
+        android:strokeColor="#FFFFFF"
+        android:strokeAlpha="0.55"
+        android:strokeWidth="0.7" />
+</vector>
