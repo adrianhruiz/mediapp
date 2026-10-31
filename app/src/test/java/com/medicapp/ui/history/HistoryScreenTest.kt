@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import com.medicapp.data.repository.FakeMedicationHistoryRepository
 import com.medicapp.data.repository.FakeReasonRepository
@@ -37,7 +38,8 @@ class HistoryScreenTest {
 
     private fun setContent(
         entries: List<TakenEntry>,
-        onOpenMedication: (TakenEntry) -> Unit,
+        onEditEntry: (TakenEntry) -> Unit = {},
+        onOpenMedication: (TakenEntry) -> Unit = {},
     ) {
         val viewModel = HistoryViewModel(
             FakeMedicationHistoryRepository(entries),
@@ -46,7 +48,7 @@ class HistoryScreenTest {
         composeRule.setContent {
             HistoryScreen(
                 contentPadding = PaddingValues(),
-                onEditEntry = {},
+                onEditEntry = onEditEntry,
                 onOpenMedication = onOpenMedication,
                 viewModel = viewModel,
             )
@@ -54,9 +56,35 @@ class HistoryScreenTest {
     }
 
     @Test
-    fun `clicking a history entry opens the medication it refers to`() {
+    fun `tapping an entry opens it for editing`() {
+        var edited: TakenEntry? = null
+        setContent(listOf(entry("1", "12345", "Ibuprofeno")), onEditEntry = { edited = it })
+
+        composeRule.onNodeWithContentDescription("Abrir entrada de Ibuprofeno").performClick()
+
+        assertEquals("1", edited?.id)
+    }
+
+    @Test
+    fun `rows have no pencil or trash of their own`() {
+        setContent(listOf(entry("1", "12345", "Ibuprofeno")))
+
+        composeRule.onNodeWithContentDescription("Editar").assertDoesNotExist()
+        composeRule.onNodeWithContentDescription("Eliminar").assertDoesNotExist()
+    }
+
+    @Test
+    fun `entries are grouped under their month`() {
+        setContent(listOf(entry("1", "12345", "Ibuprofeno")))
+
+        // timestamp 0 es enero de 1970; el antetítulo se pinta en mayúsculas.
+        composeRule.onNodeWithText("ENERO 1970", substring = true).assertExists()
+    }
+
+    @Test
+    fun `tapping the thumbnail opens the medication it refers to`() {
         var opened: TakenEntry? = null
-        setContent(listOf(entry("1", "12345", "Ibuprofeno"))) { opened = it }
+        setContent(listOf(entry("1", "12345", "Ibuprofeno")), onOpenMedication = { opened = it })
 
         composeRule.onNodeWithContentDescription("Ver ficha de Ibuprofeno").performClick()
 
@@ -64,9 +92,9 @@ class HistoryScreenTest {
     }
 
     @Test
-    fun `an entry without a medication reference is not clickable`() {
+    fun `an entry without a medication reference has no sheet to open`() {
         var opened: TakenEntry? = null
-        setContent(listOf(entry("1", "", "Ibuprofeno"))) { opened = it }
+        setContent(listOf(entry("1", "", "Ibuprofeno")), onOpenMedication = { opened = it })
 
         composeRule.onNodeWithContentDescription("Ver ficha de Ibuprofeno").performClick()
 

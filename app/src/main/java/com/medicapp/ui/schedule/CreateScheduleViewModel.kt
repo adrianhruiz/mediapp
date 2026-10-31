@@ -23,16 +23,26 @@ data class CreateScheduleUiState(
     val nregistro: String = "",
     val nombreMedicamento: String = "",
     val intervalHoursInput: String = "24",
-    val totalDosesInput: String = "1",
+    /** «Otra» en el control de frecuencia: solo entonces se enseña el campo de horas. */
+    val isCustomInterval: Boolean = false,
+    /** «Durante N días»; el total de tomas se deriva de aquí con [ScheduleDuration]. */
+    val days: Int = 1,
     val reasonInput: String = "",
-    val suggestions: List<Reason> = emptyList(),
+    /** Motivos ya usados, para elegirlos como chips sin escribirlos. */
+    val reasons: List<Reason> = emptyList(),
     val startAtMillis: Long = System.currentTimeMillis(),
     val isSaved: Boolean = false,
     val needsExactAlarmPermission: Boolean = false,
     val hasDuplicateActiveSchedule: Boolean = false,
-)
+) {
+    val intervalHours: Int? get() = intervalHoursInput.toIntOrNull()?.takeIf { it >= 1 }
 
-private const val MAX_SUGGESTIONS = 5
+    /** Lo que se guarda en la pauta: días × tomas al día, o nada si el intervalo no vale. */
+    val totalDoses: Int? get() = intervalHours?.let { ScheduleDuration.totalDoses(days, it) }
+
+    val canSave: Boolean
+        get() = reasonInput.isNotBlank() && totalDoses != null && !hasDuplicateActiveSchedule
+}
 
 class CreateScheduleViewModel(
     private val scheduleRepository: ScheduleRepository,
@@ -44,16 +54,13 @@ class CreateScheduleViewModel(
     private val nombreArg: String? = savedStateHandle["nombre"]
     private val fotoUrlArg: String? = savedStateHandle["fotoUrl"]
 
-    private var allReasons: List<Reason> = emptyList()
-
     private val _uiState = MutableStateFlow(CreateScheduleUiState(nregistro = nregistroArg, nombreMedicamento = nombreArg.orEmpty()))
     val uiState: StateFlow<CreateScheduleUiState> = _uiState.asStateFlow()
 
     init {
         viewModelScope.launch {
             reasonRepository.getAll().collect { reasons ->
-                allReasons = reasons
-                recomputeSuggestions()
+                _uiState.update { it.copy(reasons = reasons) }
             }
         }
         viewModelScope.launch {
@@ -62,18 +69,13 @@ class CreateScheduleViewModel(
         }
     }
 
-    private fun recomputeSuggestions() {
-        val query = _uiState.value.reasonInput.trim()
-        val filtered = if (query.isBlank()) {
-            allReasons
-        } else {
-            allReasons.filter { it.nombre.contains(query, ignoreCase = true) }
-        }
-        _uiState.update { it.copy(suggestions = filtered.take(MAX_SUGGESTIONS)) }
+    fun onIntervalPresetSelected(hours: Int) {
+        _uiState.update { it.copy(intervalHoursInput = hours.toString(), isCustomInterval = false) }
     }
 
-    fun onIntervalPresetSelected(hours: Int) {
-        _uiState.update { it.copy(intervalHoursInput = hours.toString()) }
+    /** «Otra»: deja el intervalo actual como punto de partida para editarlo a mano. */
+    fun onCustomIntervalSelected() {
+        _uiState.update { it.copy(isCustomInterval = true) }
     }
 
     fun onIntervalHoursChanged(value: String) {
@@ -82,19 +84,20 @@ class CreateScheduleViewModel(
         }
     }
 
-    fun onTotalDosesChanged(value: String) {
-        if (value.isEmpty() || value.all { it.isDigit() }) {
-            _uiState.update { it.copy(totalDosesInput = value) }
-        }
+    fun incrementDays() {
+        _uiState.update { it.copy(days = (it.days + 1).coerceAtMost(ScheduleDuration.MAX_DAYS)) }
+    }
+
+    fun decrementDays() {
+        _uiState.update { it.copy(days = (it.days - 1).coerceAtLeast(1)) }
     }
 
     fun onReasonInputChanged(newValue: String) {
         _uiState.update { it.copy(reasonInput = newValue) }
-        recomputeSuggestions()
     }
 
-    fun onSuggestionSelected(reason: Reason) {
-        _uiState.update { it.copy(reasonInput = reason.nombre, suggestions = emptyList()) }
+    fun onReasonSelected(reason: Reason) {
+        _uiState.update { it.copy(reasonInput = reason.nombre) }
     }
 
     fun onStartAtChanged(millis: Long) {
@@ -107,10 +110,9 @@ class CreateScheduleViewModel(
 
     fun save(context: Context) {
         val state = _uiState.value
-        val intervalHours = state.intervalHoursInput.toIntOrNull() ?: return
-        val totalDoses = state.totalDosesInput.toIntOrNull() ?: return
-        if (intervalHours < 1 || totalDoses < 1 || state.reasonInput.isBlank()) return
-        if (state.hasDuplicateActiveSchedule) return
+        if (!state.canSave) return
+        val intervalHours = state.intervalHours ?: return
+        val totalDoses = state.totalDoses ?: return
 
         if (!DoseAlarmScheduler.canScheduleExactAlarms(context)) {
             _uiState.update { it.copy(needsExactAlarmPermission = true) }

@@ -271,4 +271,45 @@ class AddEditEntryViewModelTest {
 
         assertEquals("Migraña", historyRepository.entries.single().reasonNombre)
     }
+
+    @Test
+    fun `deleting an entry being edited removes it from the history and closes the screen`() = runTest(dispatcher) {
+        val historyRepository = FakeMedicationHistoryRepository()
+        val entryId = historyRepository.add(
+            nregistro = "1",
+            nombreMedicamento = "Ibuprofeno",
+            reasonId = "r1",
+            reasonNombre = "Dolor de cabeza",
+            dosisSnapshot = null,
+            fotoUrl = null,
+        )
+        val viewModel = AddEditEntryViewModel(
+            historyRepository,
+            FakeReasonRepository(),
+            SavedStateHandle(mapOf("entryId" to entryId)),
+        )
+        advanceUntilIdle()
+
+        viewModel.delete()
+        advanceUntilIdle()
+
+        assertTrue(historyRepository.entries.isEmpty())
+        assertTrue(viewModel.uiState.value.isDeleted)
+    }
+
+    @Test
+    fun `a new entry cannot be deleted`() = runTest(dispatcher) {
+        val historyRepository = FakeMedicationHistoryRepository()
+        val viewModel = AddEditEntryViewModel(
+            historyRepository,
+            FakeReasonRepository(),
+            SavedStateHandle(mapOf("nregistro" to "1", "nombre" to "Ibuprofeno")),
+        )
+        advanceUntilIdle()
+
+        viewModel.delete()
+        advanceUntilIdle()
+
+        assertFalse(viewModel.uiState.value.isDeleted)
+    }
 }

@@ -20,7 +20,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -33,7 +32,6 @@ import com.medicapp.ui.components.MedicationNames
 import com.medicapp.ui.components.OnBottomReached
 import com.medicapp.ui.components.PillStyles
 import com.medicapp.ui.components.ScreenHeader
-import com.medicapp.ui.components.SecondaryButton
 import com.medicapp.ui.theme.DmMono
 
 @Composable
@@ -45,7 +43,6 @@ fun RemindersScreen(
 ) {
     val schedules by viewModel.schedules.collectAsStateWithLifecycle()
     val hasMore by viewModel.hasMore.collectAsStateWithLifecycle()
-    val context = LocalContext.current
     val active = schedules.filter { it.status == ScheduleStatus.ACTIVE }
     val closed = schedules.filter { it.status == ScheduleStatus.CLOSED }
     val listState = rememberLazyListState()
@@ -78,17 +75,13 @@ fun RemindersScreen(
         if (active.isNotEmpty()) {
             item { Eyebrow("Activas", modifier = Modifier.padding(top = 8.dp)) }
             items(active, key = { it.id }) { schedule ->
-                ScheduleCard(
-                    schedule = schedule,
-                    onClick = { onOpenSchedule(schedule) },
-                    onClose = { viewModel.closeSchedule(context, schedule) },
-                )
+                ScheduleCard(schedule = schedule, onClick = { onOpenSchedule(schedule) })
             }
         }
         if (closed.isNotEmpty()) {
             item { Eyebrow("Cerradas", modifier = Modifier.padding(top = 16.dp)) }
             items(closed, key = { it.id }) { schedule ->
-                ScheduleCard(schedule = schedule, onClick = { onOpenSchedule(schedule) }, onClose = null)
+                ScheduleCard(schedule = schedule, onClick = { onOpenSchedule(schedule) })
             }
         }
         if (hasMore) {
@@ -101,8 +94,9 @@ fun RemindersScreen(
     }
 }
 
+// «Cerrar periodo» ya no va en cada tarjeta: es una acción de la pauta y vive en su detalle.
 @Composable
-private fun ScheduleCard(schedule: MedicationSchedule, onClick: () -> Unit, onClose: (() -> Unit)?) {
+private fun ScheduleCard(schedule: MedicationSchedule, onClick: () -> Unit) {
     Card(modifier = Modifier.fillMaxWidth().clickable(onClick = onClick)) {
         Row(
             modifier = Modifier.padding(16.dp),
@@ -126,9 +120,6 @@ private fun ScheduleCard(schedule: MedicationSchedule, onClick: () -> Unit, onCl
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                if (onClose != null) {
-                    SecondaryButton(onClick = onClose, modifier = Modifier.padding(top = 8.dp)) { Text("Cerrar periodo") }
-                }
             }
         }
     }

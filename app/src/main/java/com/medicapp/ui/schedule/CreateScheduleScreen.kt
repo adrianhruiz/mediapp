@@ -4,12 +4,10 @@ import android.Manifest
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -21,6 +19,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
@@ -35,32 +34,30 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.medicapp.ui.components.GelButton
 import com.medicapp.domain.DoseScheduleCalculator
-import com.medicapp.model.Reason
 import com.medicapp.notifications.DoseAlarmScheduler
-import com.medicapp.ui.components.BlisterCell
-import com.medicapp.ui.components.DoseCellState
-import com.medicapp.ui.components.Eyebrow
-import com.medicapp.ui.components.FoilCard
+import com.medicapp.ui.components.SegmentedControl
+import com.medicapp.ui.components.GelBarButton
+import com.medicapp.ui.components.GroupHeader
+import com.medicapp.ui.components.GroupedList
+import com.medicapp.ui.components.GroupedRow
 import com.medicapp.ui.components.MedicationNames
-import com.medicapp.ui.components.PillStyles
 import com.medicapp.ui.components.ScreenHeader
-import com.medicapp.ui.components.SecondaryButton
 import com.medicapp.ui.theme.DmMono
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun CreateScheduleScreen(
     onDone: () -> Unit,
@@ -97,14 +94,16 @@ fun CreateScheduleScreen(
             eyebrow = "Nueva pauta",
             onBack = onCancel,
             modifier = Modifier.padding(bottom = 16.dp),
-        )
+        ) {
+            GelBarButton(onClick = { viewModel.save(context) }, enabled = uiState.canSave) {
+                Text("Guardar")
+            }
+        }
 
         if (uiState.hasDuplicateActiveSchedule) {
             Card(
                 modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
-                colors = androidx.compose.material3.CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.errorContainer,
-                ),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
             ) {
                 Text(
                     "Ya tienes una pauta activa para este medicamento. " +
@@ -115,90 +114,82 @@ fun CreateScheduleScreen(
             }
         }
 
-        Text("Frecuencia", style = MaterialTheme.typography.titleMedium)
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.padding(top = 8.dp),
-        ) {
-            listOf(8 to "Cada 8h", 12 to "Cada 12h", 24 to "Cada 24h").forEach { (hours, label) ->
-                FilterChip(
-                    selected = uiState.intervalHoursInput == hours.toString(),
-                    onClick = { viewModel.onIntervalPresetSelected(hours) },
-                    label = { Text(label) },
+        GroupHeader("Frecuencia")
+        SegmentedControl(
+            options = intervalPresets.map { "$it h" } + "Otra",
+            selectedIndex = if (uiState.isCustomInterval) {
+                intervalPresets.size
+            } else {
+                intervalPresets.indexOf(uiState.intervalHoursInput.toIntOrNull()).takeIf { it >= 0 } ?: intervalPresets.size
+            },
+            onSelect = { index ->
+                if (index < intervalPresets.size) {
+                    viewModel.onIntervalPresetSelected(intervalPresets[index])
+                } else {
+                    viewModel.onCustomIntervalSelected()
+                }
+            },
+        )
+        if (uiState.isCustomInterval) {
+            OutlinedTextField(
+                value = uiState.intervalHoursInput,
+                onValueChange = viewModel::onIntervalHoursChanged,
+                label = { Text("Horas entre tomas") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                singleLine = true,
+            )
+        }
+
+        GroupedList(modifier = Modifier.padding(top = 24.dp)) {
+            GroupedRow {
+                Text(
+                    "Durante ${uiState.days} ${if (uiState.days == 1) "día" else "días"}",
+                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier.weight(1f),
+                )
+                GelBarButton(
+                    onClick = viewModel::decrementDays,
+                    enabled = uiState.days > 1,
+                    modifier = Modifier.semantics { contentDescription = "Un día menos" },
+                ) { Text("−") }
+                GelBarButton(
+                    onClick = viewModel::incrementDays,
+                    enabled = uiState.days < ScheduleDuration.MAX_DAYS,
+                    modifier = Modifier.semantics { contentDescription = "Un día más" },
+                ) { Text("+") }
+            }
+            GroupedRow(divider = true, onClick = { showTimePicker = true }) {
+                Text("Primera toma", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+                val formattedStartAt = remember(uiState.startAtMillis) { previewHour.format(Date(uiState.startAtMillis)) }
+                Text(
+                    formattedStartAt,
+                    style = MaterialTheme.typography.bodyLarge.copy(fontFamily = DmMono),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }
-        OutlinedTextField(
-            value = uiState.intervalHoursInput,
-            onValueChange = viewModel::onIntervalHoursChanged,
-            label = { Text("Horas entre tomas") },
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-            singleLine = true,
-        )
+        ScheduleSummary(uiState)
 
-        OutlinedTextField(
-            value = uiState.totalDosesInput,
-            onValueChange = viewModel::onTotalDosesChanged,
-            label = { Text("Cantidad de tomas del periodo") },
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-            modifier = Modifier.fillMaxWidth().padding(top = 24.dp),
-            singleLine = true,
-        )
-
-        Text(
-            "Hora de la primera toma",
-            style = MaterialTheme.typography.titleMedium,
-            modifier = Modifier.padding(top = 24.dp),
-        )
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(top = 8.dp),
-        ) {
-            val timeFormatter = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
-            val formattedStartAt = remember(uiState.startAtMillis) {
-                timeFormatter.format(Date(uiState.startAtMillis))
-            }
-            Text(
-                formattedStartAt,
-                style = MaterialTheme.typography.bodyLarge,
-                modifier = Modifier.padding(end = 12.dp),
-            )
-            SecondaryButton(onClick = { showTimePicker = true }) {
-                Text("Cambiar hora")
-            }
-        }
-
-        FirstDayPreview(uiState)
-
-        OutlinedTextField(
-            value = uiState.reasonInput,
-            onValueChange = viewModel::onReasonInputChanged,
-            label = { Text("Motivo (ej. alergia estacional)") },
-            modifier = Modifier.fillMaxWidth().padding(top = 24.dp),
-            singleLine = true,
-        )
-        if (uiState.suggestions.isNotEmpty()) {
-            Column(modifier = Modifier.padding(top = 8.dp)) {
-                uiState.suggestions.forEach { reason ->
-                    ReasonSuggestionRow(reason = reason, onClick = { viewModel.onSuggestionSelected(reason) })
+        GroupHeader("Motivo", modifier = Modifier.padding(top = 24.dp))
+        if (uiState.reasons.isNotEmpty()) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                uiState.reasons.forEach { reason ->
+                    FilterChip(
+                        selected = reason.nombre.equals(uiState.reasonInput.trim(), ignoreCase = true),
+                        onClick = { viewModel.onReasonSelected(reason) },
+                        label = { Text(reason.nombre) },
+                    )
                 }
             }
         }
-
-        GelButton(
-            onClick = { viewModel.save(context) },
-            enabled = uiState.reasonInput.isNotBlank() &&
-                uiState.intervalHoursInput.isNotBlank() &&
-                uiState.totalDosesInput.isNotBlank() &&
-                !uiState.hasDuplicateActiveSchedule,
-            modifier = Modifier.fillMaxWidth().padding(top = 24.dp),
-        ) {
-            Text("Guardar pauta")
-        }
-        SecondaryButton(onClick = onCancel, modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
-            Text("Cancelar")
-        }
+        OutlinedTextField(
+            value = uiState.reasonInput,
+            onValueChange = viewModel::onReasonInputChanged,
+            placeholder = { Text("Motivo (ej. alergia estacional)") },
+            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+            singleLine = true,
+        )
     }
 
     if (showTimePicker) {
@@ -254,58 +245,22 @@ fun CreateScheduleScreen(
 }
 
 private val previewHour = SimpleDateFormat("HH:mm", Locale.forLanguageTag("es-ES"))
-private val previewDay = SimpleDateFormat("EEEE d MMM 'a las' HH:mm", Locale.forLanguageTag("es-ES"))
 
-/** Más celdas no caben en una fila y no aportan: con ver el ritmo del primer día basta. */
-private const val MAX_PREVIEW_CELLS = 6
+/** Frecuencias de un toque; cualquier otra se escribe con «Otra». */
+private val intervalPresets = listOf(8, 12, 24)
 
-/**
- * Las tomas del primer día en celdas de blíster, y cuándo acaba la pauta: se ve el ritmo antes
- * de guardar, sin tener que hacer la cuenta de cabeza.
- */
-@OptIn(ExperimentalLayoutApi::class)
+/** El total de tomas y cuándo acaba, en una línea: se ve sin hacer la cuenta de cabeza. */
 @Composable
-private fun FirstDayPreview(uiState: CreateScheduleUiState) {
-    val interval = uiState.intervalHoursInput.toIntOrNull()?.takeIf { it > 0 } ?: return
-    val total = uiState.totalDosesInput.toIntOrNull()?.takeIf { it > 0 } ?: return
-    val times = DoseScheduleCalculator.computeDoseTimes(uiState.startAtMillis, interval, total)
-    val firstDay = times.takeWhile { it < uiState.startAtMillis + 24 * 3_600_000L }.take(MAX_PREVIEW_CELLS)
-    val pill = PillStyles.forMedication(uiState.nregistro, uiState.nombreMedicamento)
-
-    Eyebrow("Primer día", modifier = Modifier.padding(top = 24.dp, bottom = 8.dp))
-    FoilCard(modifier = Modifier.fillMaxWidth()) {
-        FlowRow(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceEvenly,
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            firstDay.forEach { time ->
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    BlisterCell(state = DoseCellState.PENDING, pill = pill, width = 44.dp)
-                    Text(
-                        previewHour.format(Date(time)),
-                        style = MaterialTheme.typography.labelLarge.copy(fontFamily = DmMono),
-                    )
-                }
-            }
-        }
+private fun ScheduleSummary(uiState: CreateScheduleUiState) {
+    val interval = uiState.intervalHours ?: return
+    val total = uiState.totalDoses ?: return
+    val last = remember(uiState.startAtMillis, interval, total) {
+        DoseScheduleCalculator.computeDoseTimes(uiState.startAtMillis, interval, total).last()
     }
     Text(
-        "$total ${if (total == 1) "toma" else "tomas"} · la última el ${previewDay.format(Date(times.last())).replace(".", "")}",
-        style = MaterialTheme.typography.bodyMedium,
+        ScheduleDuration.summary(total, last),
+        style = MaterialTheme.typography.bodyMedium.copy(fontFamily = DmMono),
         color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(top = 8.dp),
+        modifier = Modifier.padding(start = 4.dp, top = 8.dp),
     )
-}
-
-@Composable
-private fun ReasonSuggestionRow(reason: Reason, onClick: () -> Unit) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 2.dp)
-            .clickable(onClick = onClick),
-    ) {
-        Text(reason.nombre, modifier = Modifier.padding(12.dp))
-    }
 }
