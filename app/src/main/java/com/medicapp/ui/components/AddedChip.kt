@@ -11,7 +11,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 
-/** Distintivo para lo que el usuario ya tiene añadido: historial, recordatorios, alergias. */
+/**
+ * Sello discreto para lo que el usuario ya tiene añadido: historial, recordatorios, alergias. Va
+ * en gris, no en color: es información, no pide atención.
+ */
 @Composable
 fun AddedChip(
     text: String,
@@ -24,9 +27,9 @@ fun AddedChip(
         label = { Text(text) },
         leadingIcon = { Icon(icon, contentDescription = null) },
         colors = AssistChipDefaults.assistChipColors(
-            disabledContainerColor = MaterialTheme.colorScheme.secondaryContainer,
-            disabledLabelColor = MaterialTheme.colorScheme.onSecondaryContainer,
-            disabledLeadingIconContentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+            disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+            disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+            disabledLeadingIconContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
         ),
         modifier = modifier,
     )

@@ -3,12 +3,14 @@ package com.medicapp.ui.search
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.lifecycle.SavedStateHandle
@@ -89,10 +91,11 @@ class MedicationDetailScreenTest {
             ),
         )
 
-        // El aviso es una sola fila que lleva hasta el chip; el nombre de la alergia solo va en él.
+        // El aviso es una sola fila que lleva hasta el interruptor; el nombre de la alergia solo
+        // va en él (una vez), no repetido en el aviso.
         composeRule.onNodeWithText("Desrecomendado para ti").assertHasClickAction()
         composeRule.onNodeWithText("Por una alergia marcada abajo").assertExists()
-        composeRule.onNodeWithText("Paracetamol").assertDoesNotExist()
+        composeRule.onAllNodesWithText("Paracetamol").assertCountEquals(1)
         composeRule.onNodeWithText("Principio activo").assertDoesNotExist()
         composeRule.onNodeWithText("Añadir al historial").assertIsNotEnabled()
         // El motivo ya está en la etiqueta: no se repite bajo el botón.
@@ -109,6 +112,17 @@ class MedicationDetailScreenTest {
         composeRule.onNodeWithText("Familia · N02B").assertDoesNotExist()
         composeRule.onNodeWithText("Añadir al historial").assertIsNotEnabled()
         composeRule.onNodeWithText("Crear pauta").assertIsNotEnabled()
+    }
+
+    @Test
+    fun familyAllergiesStayReachableInsideMoreInformation() {
+        setContent(emptyList())
+        composeRule.onNodeWithText("N02BE01").assertDoesNotExist()
+
+        composeRule.onNodeWithText("Más información").performClick()
+        composeRule.onNodeWithText("N02BE01").performClick()
+
+        composeRule.onNodeWithText("Añadir al historial").assertIsNotEnabled()
     }
 
     @Test
@@ -145,7 +159,8 @@ class MedicationDetailScreenTest {
         setContent(emptyList())
         composeRule.onNodeWithText("Añadir al historial").assertIsEnabled()
 
-        composeRule.onNodeWithText("PARACETAMOL").performClick()
+        // Cada componente es una fila con interruptor «Alérgico»; tocar la fila lo activa.
+        composeRule.onNodeWithText("Paracetamol").performClick()
 
         composeRule.onNodeWithText("Añadir al historial").assertIsNotEnabled()
     }
