@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -15,6 +16,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
@@ -39,11 +41,11 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.medicapp.model.CustomMedication
 import com.medicapp.model.Medication
-import com.medicapp.ui.components.AddedChip
 import com.medicapp.ui.components.MedicationNames
 import com.medicapp.ui.components.MedicationThumbnail
 import com.medicapp.ui.components.ScreenHeader
 import com.medicapp.ui.components.SearchHelpButton
+import com.medicapp.ui.components.StatusSeal
 import com.medicapp.ui.theme.DmMono
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -242,11 +244,18 @@ private fun MedicationResultCard(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            MedicationThumbnail(
-                fotoUrl = medication.fotoUrl,
-                seed = medication.nregistro,
-                modifier = Modifier.padding(end = 12.dp),
-            )
+            // Los estados van como sellos sobre la foto y no como chips debajo: no hacen más alta
+            // la tarjeta y no se confunden con botones.
+            Box(modifier = Modifier.padding(end = 12.dp)) {
+                MedicationThumbnail(fotoUrl = medication.fotoUrl, seed = medication.nregistro)
+                Row(
+                    modifier = Modifier.align(Alignment.BottomEnd).offset(x = 6.dp, y = 6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(2.dp),
+                ) {
+                    if (isSaved) StatusSeal(Icons.Default.Bookmark, "Ya lo tienes guardado")
+                    if (isInHistory) StatusSeal(Icons.Default.Check, "Ya en tu historial")
+                }
+            }
             val (name, detail) = MedicationNames.split(medication.nombre)
             Column(modifier = Modifier.weight(1f).padding(end = 8.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(name, style = MaterialTheme.typography.titleMedium)
@@ -267,16 +276,6 @@ private fun MedicationResultCard(
                 }
                 medication.labtitular?.let {
                     Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-                if (isInHistory) {
-                    AddedChip("Ya en tu historial", modifier = Modifier.padding(top = 4.dp))
-                }
-                if (isSaved) {
-                    AddedChip(
-                        "Ya lo tienes guardado",
-                        icon = Icons.Default.Bookmark,
-                        modifier = Modifier.padding(top = 4.dp),
-                    )
                 }
             }
             Icon(Icons.Default.ArrowForward, contentDescription = null)
