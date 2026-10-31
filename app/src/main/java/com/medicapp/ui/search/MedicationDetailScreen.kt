@@ -1,6 +1,8 @@
 package com.medicapp.ui.search
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -29,6 +31,9 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.graphics.Brush
@@ -36,6 +41,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -48,6 +54,7 @@ import com.medicapp.ui.components.GroupedList
 import com.medicapp.ui.components.GroupedRow
 import com.medicapp.ui.components.Eyebrow
 import com.medicapp.ui.components.MedicationNames
+import com.medicapp.ui.components.MedicationPhotoViewer
 import com.medicapp.ui.components.MedicationThumbnail
 import com.medicapp.ui.components.SecondaryButton
 import com.medicapp.ui.components.StatusSeal
@@ -66,6 +73,7 @@ fun MedicationDetailScreen(
     // Tocar una alergia del aviso baja hasta la sección donde está su chip.
     val ingredientsSection = remember { BringIntoViewRequester() }
     val familiesSection = remember { BringIntoViewRequester() }
+    var showPhoto by rememberSaveable { mutableStateOf(false) }
 
     Scaffold(
         containerColor = Color.Transparent,
@@ -103,11 +111,23 @@ fun MedicationDetailScreen(
                 ) {
                     val (name, detail) = MedicationNames.split(medication.nombre)
                     Row(verticalAlignment = Alignment.CenterVertically) {
+                        // Solo la ficha deja ampliar la foto: en las listas, tocar la fila ya navega.
+                        val fotoUrl = medication.fotoUrl
                         MedicationThumbnail(
-                            fotoUrl = medication.fotoUrl,
+                            fotoUrl = fotoUrl,
                             seed = medication.nregistro,
-                            modifier = Modifier.padding(end = 12.dp),
+                            modifier = Modifier
+                                .padding(end = 12.dp)
+                                .then(
+                                    if (fotoUrl == null) Modifier
+                                    else Modifier
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .clickable(onClickLabel = "Ampliar foto") { showPhoto = true },
+                                ),
                         )
+                        if (showPhoto && fotoUrl != null) {
+                            MedicationPhotoViewer(thumbnailUrl = fotoUrl, onDismiss = { showPhoto = false })
+                        }
                         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                             Text(name, style = MaterialTheme.typography.headlineSmall)
                             detail?.let {
