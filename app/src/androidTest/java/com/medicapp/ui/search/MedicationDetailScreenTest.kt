@@ -78,11 +78,11 @@ class MedicationDetailScreenTest {
             ),
         )
 
-        composeRule.onNodeWithText("Desrecomendado para ti").assertExists()
-        composeRule.onNodeWithText("No se puede añadir al historial").assertExists()
-        // Cada alergia es una fila que lleva hasta su chip.
-        composeRule.onNodeWithText("Paracetamol").assertHasClickAction()
-        composeRule.onNodeWithText("Principio activo").assertExists()
+        // El aviso es una sola fila que lleva hasta el chip; el nombre de la alergia solo va en él.
+        composeRule.onNodeWithText("Desrecomendado para ti").assertHasClickAction()
+        composeRule.onNodeWithText("Por una alergia marcada abajo").assertExists()
+        composeRule.onNodeWithText("Paracetamol").assertDoesNotExist()
+        composeRule.onNodeWithText("Principio activo").assertDoesNotExist()
         composeRule.onNodeWithText("Añadir al historial").assertIsNotEnabled()
         // El motivo ya está en la etiqueta: no se repite bajo el botón.
         composeRule.onNodeWithText("No puedes añadirlo", substring = true).assertDoesNotExist()
@@ -94,8 +94,8 @@ class MedicationDetailScreenTest {
             listOf(Allergy(id = "1", tipo = AllergyType.FAMILIA, atcCodigo = "N02B", atcNombre = "Analgésicos")),
         )
 
-        composeRule.onNodeWithText("Analgésicos").assertExists()
-        composeRule.onNodeWithText("Familia · N02B").assertExists()
+        composeRule.onNodeWithText("Por una alergia marcada abajo").assertExists()
+        composeRule.onNodeWithText("Familia · N02B").assertDoesNotExist()
         composeRule.onNodeWithText("Añadir al historial").assertIsNotEnabled()
     }
 
