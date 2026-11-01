@@ -19,6 +19,8 @@ import com.medicapp.data.repository.MedicationSearchRepository
 import com.medicapp.data.repository.ProfileRepository
 import com.medicapp.data.repository.ReasonRepository
 import com.medicapp.data.repository.ScheduleRepository
+import com.medicapp.data.remote.ChemblAtcEnglishNameSource
+import com.medicapp.domain.AllergyTranslator
 import com.medicapp.domain.DoseTaker
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -51,6 +53,11 @@ class AppContainer(context: Context) {
 
     val reasonRepository: ReasonRepository =
         FirestoreReasonRepository(FirebaseModule.firestore, authRepository, appScope)
+
+    /** Traduce al inglés las familias de alergia según se añaden, mientras la app esté abierta. */
+    private val allergyTranslator =
+        AllergyTranslator(allergyRepository, ChemblAtcEnglishNameSource(networkModule.chemblApiService))
+            .also { it.start(appScope) }
 
     val profileRepository: ProfileRepository =
         FirestoreProfileRepository(FirebaseModule.firestore, authRepository)

@@ -129,4 +129,36 @@ class AllergyReportViewModelTest {
         assertEquals("12 mar 1985", ReportText.of(ReportLanguage.ES).formatDate(date))
         assertEquals("12 Mar 1985", ReportText.of(ReportLanguage.EN).formatDate(date))
     }
+
+    @Test
+    fun `an English name can be typed for an allergy left in Spanish and cleared again`() = runTest(dispatcher) {
+        val allergyRepository = FakeAllergyRepository(allergies)
+        val viewModel = AllergyReportViewModel(allergyRepository, FakeProfileRepository())
+        backgroundScope.launch { viewModel.uiState.collect {} }
+
+        viewModel.setManualEnglishName(allergies[0], "  metamizole magnesium  ")
+        advanceUntilIdle()
+        val edited = allergyRepository.allergies.single { it.id == "1" }
+        assertEquals("metamizole magnesium", edited.nombreIngles)
+        assertTrue(edited.nombreInglesManual)
+
+        viewModel.setManualEnglishName(edited, " ")
+        advanceUntilIdle()
+        assertNull(allergyRepository.allergies.single { it.id == "1" }.nombreIngles)
+    }
+
+    @Test
+    fun `an official WHO translation cannot be overwritten by hand`() = runTest(dispatcher) {
+        val official = Allergy(
+            id = "2", tipo = AllergyType.FAMILIA, atcCodigo = "J01C", atcNombre = "PENICILINAS",
+            nombreIngles = "BETA-LACTAM ANTIBACTERIALS, PENICILLINS",
+        )
+        val allergyRepository = FakeAllergyRepository(listOf(official))
+        val viewModel = AllergyReportViewModel(allergyRepository, FakeProfileRepository())
+
+        viewModel.setManualEnglishName(official, "penicillins")
+        advanceUntilIdle()
+
+        assertEquals("BETA-LACTAM ANTIBACTERIALS, PENICILLINS", allergyRepository.allergies.single().nombreIngles)
+    }
 }

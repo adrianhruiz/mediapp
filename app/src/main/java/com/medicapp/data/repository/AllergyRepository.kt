@@ -22,4 +22,13 @@ interface AllergyRepository {
     suspend fun addFamilias(familias: List<AtcCode>)
 
     suspend fun delete(allergyId: String)
+
+    /**
+     * Guarda la traducción oficial solo si la alergia sigue sin nombre en inglés: si el usuario
+     * escribió uno mientras se consultaba, el suyo se queda.
+     */
+    suspend fun setOfficialEnglishNameIfMissing(allergyId: String, nombreIngles: String)
+
+    /** Guarda el nombre en inglés de una alergia; null lo borra. */
+    suspend fun setEnglishName(allergyId: String, nombreIngles: String?, manual: Boolean)
 }

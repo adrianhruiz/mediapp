@@ -9,6 +9,7 @@ import com.medicapp.MedicApp
 import com.medicapp.data.repository.AllergyRepository
 import com.medicapp.data.repository.ProfileRepository
 import com.medicapp.domain.AllergyGroups
+import com.medicapp.model.Allergy
 import com.medicapp.model.PatientProfile
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -28,7 +29,7 @@ data class AllergyReportUiState(
 )
 
 class AllergyReportViewModel(
-    allergyRepository: AllergyRepository,
+    private val allergyRepository: AllergyRepository,
     private val profileRepository: ProfileRepository,
 ) : ViewModel() {
 
@@ -57,6 +58,16 @@ class AllergyReportViewModel(
             runCatching { profileRepository.save(PatientProfile(trimmed, fechaNacimiento)) }
                 .onFailure { profileSaveFailed.value = true }
         }
+    }
+
+    /**
+     * Nombre en inglés escrito a mano para una alergia que se quedó en español; en blanco lo
+     * borra. Una traducción oficial no se toca: es la de la OMS para ese código exacto.
+     */
+    fun setManualEnglishName(allergy: Allergy, nombreIngles: String) {
+        if (allergy.nombreIngles != null && !allergy.nombreInglesManual) return
+        val trimmed = nombreIngles.trim().takeIf { it.isNotEmpty() }
+        viewModelScope.launch { runCatching { allergyRepository.setEnglishName(allergy.id, trimmed, manual = true) } }
     }
 
     companion object {

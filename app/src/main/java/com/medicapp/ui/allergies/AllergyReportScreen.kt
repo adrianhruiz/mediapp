@@ -11,7 +11,12 @@ import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.DisplayMode
@@ -126,8 +131,30 @@ fun AllergyReportScreen(
         if (groups.families.isEmpty() && groups.ingredients.isEmpty()) {
             Text(text.noAllergies, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(top = 16.dp))
         }
-        ReportGroup(text.families, groups.families)
-        ReportGroup(text.ingredients, groups.ingredients)
+        var editing by remember { mutableStateOf<Allergy?>(null) }
+        val english = uiState.language == ReportLanguage.EN
+        ReportGroup(text.families, groups.families, english, onEdit = { editing = it })
+        ReportGroup(text.ingredients, groups.ingredients, english, onEdit = { editing = it })
+        editing?.let { allergy ->
+            EnglishNameDialog(
+                allergy = allergy,
+                onSave = { name ->
+                    viewModel.setManualEnglishName(allergy, name)
+                    editing = null
+                },
+                onDismiss = { editing = null },
+            )
+        }
+
+        val hasManual = english && (groups.families + groups.ingredients).any { it.nombreInglesManual }
+        if (hasManual) {
+            Text(
+                text.manualNote,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 16.dp),
+            )
+        }
 
         Text(
             text.namesNote,
@@ -157,13 +184,18 @@ private fun PatientBlock(profile: PatientProfile, text: ReportText, onEdit: () -
     TextButton(onClick = onEdit) { Text("Editar datos del paciente") }
 }
 
-/** Código ATC delante y en negrita: es lo que el médico busca de un vistazo. */
+/**
+ * Código ATC delante y en negrita: es lo que el médico busca de un vistazo. En inglés, el
+ * nombre en español queda debajo, para que una traducción nunca oculte el dato original.
+ */
 @Composable
-private fun ReportGroup(title: String, allergies: List<Allergy>) {
+private fun ReportGroup(title: String, allergies: List<Allergy>, english: Boolean, onEdit: (Allergy) -> Unit) {
     if (allergies.isEmpty()) return
     GroupHeader(title, modifier = Modifier.padding(top = 16.dp))
     GroupedList {
         allergies.forEachIndexed { index, allergy ->
+            val spanish = MedicationNames.pretty(allergy.principioActivoNombre ?: allergy.atcNombre.orEmpty())
+            val translated = allergy.nombreIngles?.takeIf { english }
             GroupedRow(divider = index > 0) {
                 allergy.atcCodigo?.let { codigo ->
                     Text(
@@ -171,14 +203,61 @@ private fun ReportGroup(title: String, allergies: List<Allergy>) {
                         style = MaterialTheme.typography.titleMedium.copy(fontFamily = DmMono, fontWeight = FontWeight.Bold),
                     )
                 }
-                Text(
-                    MedicationNames.pretty(allergy.principioActivoNombre ?: allergy.atcNombre.orEmpty()),
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.weight(1f),
-                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        // El nombre de la OMS va tal cual: su copyright no permite modificarlo.
+                        translated?.let { it + if (allergy.nombreInglesManual) " *" else "" } ?: spanish,
+                        style = MaterialTheme.typography.titleMedium,
+                    )
+                    if (translated != null) {
+                        Text(
+                            spanish,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+                // Solo lo que no tiene traducción oficial: la de la OMS no se toca.
+                if (english && (allergy.nombreIngles == null || allergy.nombreInglesManual)) {
+                    IconButton(onClick = { onEdit(allergy) }) {
+                        Icon(Icons.Default.Edit, contentDescription = "Escribir el nombre en inglés")
+                    }
+                }
             }
         }
     }
+}
+
+@Composable
+private fun EnglishNameDialog(allergy: Allergy, onSave: (String) -> Unit, onDismiss: () -> Unit) {
+    var name by rememberSaveable(allergy.id) { mutableStateOf(allergy.nombreIngles.orEmpty()) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Nombre en inglés") },
+        text = {
+            Column {
+                Text(
+                    MedicationNames.pretty(allergy.principioActivoNombre ?: allergy.atcNombre.orEmpty()),
+                    style = MaterialTheme.typography.bodyLarge,
+                )
+                Text(
+                    "No hay traducción oficial. Lo que escribas saldrá en el informe marcado con * " +
+                        "como escrito por el paciente. Déjalo en blanco para quitarlo.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+                )
+            }
+        },
+        confirmButton = { TextButton(onClick = { onSave(name) }) { Text("Guardar") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } },
+    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
