@@ -108,6 +108,7 @@ class MedicationDetailScreenTest {
         composeRule.onNodeWithText("Por una alergia marcada abajo").assertExists()
         composeRule.onNodeWithText("Familia · N02B").assertDoesNotExist()
         composeRule.onNodeWithText("Añadir al historial").assertIsNotEnabled()
+        composeRule.onNodeWithText("Crear pauta").assertIsNotEnabled()
     }
 
     @Test

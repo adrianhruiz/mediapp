@@ -119,6 +119,26 @@ class MedicationDetailViewModelTest {
     }
 
     @Test
+    fun `a medication matching an allergy cannot be scheduled`() = runTest(dispatcher) {
+        val viewModel = createViewModel(
+            FakeAllergyRepository(
+                listOf(Allergy(id = "1", tipo = AllergyType.FAMILIA, atcCodigo = "N02B", atcNombre = "Analgésicos")),
+            ),
+        )
+        advanceUntilIdle()
+
+        assertFalse(viewModel.uiState.value.canCreateSchedule)
+    }
+
+    @Test
+    fun `a medication without allergy matches can be scheduled`() = runTest(dispatcher) {
+        val viewModel = createViewModel(FakeAllergyRepository())
+        advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.canCreateSchedule)
+    }
+
+    @Test
     fun `a medication matching a family allergy cannot be added to the history`() = runTest(dispatcher) {
         val viewModel = createViewModel(
             FakeAllergyRepository(

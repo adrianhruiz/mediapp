@@ -255,6 +255,7 @@ fun MedicationDetailScreen(
                     }
                     SecondaryButton(
                         onClick = { onCreateReminder(medication) },
+                        enabled = uiState.canCreateSchedule,
                         modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
                     ) {
                         Text("Crear pauta")
