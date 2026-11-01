@@ -63,6 +63,9 @@ class CreateScheduleViewModel(
 
     private var allReasons: List<Reason> = emptyList()
 
+    /** Evita lanzar dos ediciones con un doble toque en Guardar. */
+    private var isSavingEdit = false
+
     /** Motivo con el que llega la pauta editada: no tiene sentido sugerirlo de vuelta. */
     private var loadedReason: String? = null
 
@@ -217,6 +220,8 @@ class CreateScheduleViewModel(
 
     /** Las alarmas se mueven solo si Firestore confirma la edición, que necesita conexión. */
     private fun saveEdit(appContext: Context, scheduleId: String, intervalHours: Int, totalDoses: Int) {
+        if (isSavingEdit) return
+        isSavingEdit = true
         val state = _uiState.value
         _uiState.update { it.copy(saveFailed = false) }
         viewModelScope.launch {
@@ -232,6 +237,7 @@ class CreateScheduleViewModel(
                 )
             }.getOrNull()
             if (result == null) {
+                isSavingEdit = false
                 _uiState.update { it.copy(saveFailed = true) }
                 return@launch
             }
