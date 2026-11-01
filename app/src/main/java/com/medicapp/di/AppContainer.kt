@@ -10,11 +10,13 @@ import com.medicapp.data.repository.AuthRepository
 import com.medicapp.data.repository.FirebaseAuthRepository
 import com.medicapp.data.repository.FirestoreAllergyRepository
 import com.medicapp.data.repository.FirestoreMedicationHistoryRepository
+import com.medicapp.data.repository.FirestoreProfileRepository
 import com.medicapp.data.repository.FirestoreReasonRepository
 import com.medicapp.data.repository.FirestoreScheduleRepository
 import com.medicapp.data.repository.MedicationCatalogRepository
 import com.medicapp.data.repository.MedicationHistoryRepository
 import com.medicapp.data.repository.MedicationSearchRepository
+import com.medicapp.data.repository.ProfileRepository
 import com.medicapp.data.repository.ReasonRepository
 import com.medicapp.data.repository.ScheduleRepository
 import com.medicapp.domain.DoseTaker
@@ -49,6 +51,9 @@ class AppContainer(context: Context) {
 
     val reasonRepository: ReasonRepository =
         FirestoreReasonRepository(FirebaseModule.firestore, authRepository, appScope)
+
+    val profileRepository: ProfileRepository =
+        FirestoreProfileRepository(FirebaseModule.firestore, authRepository)
 
     val scheduleRepository: ScheduleRepository =
         FirestoreScheduleRepository(FirebaseModule.firestore, authRepository)

@@ -29,6 +29,7 @@ import androidx.navigation.navArgument
 import com.medicapp.ui.components.pinstripe
 import com.medicapp.ui.addedit.AddEditEntryScreen
 import com.medicapp.ui.allergies.AllergiesScreen
+import com.medicapp.ui.allergies.AllergyReportScreen
 import com.medicapp.ui.auth.LoginScreen
 import com.medicapp.ui.auth.RegisterScreen
 import com.medicapp.ui.history.HistoryHubScreen
@@ -48,6 +49,7 @@ private const val ROUTE_SEARCH = "search"
 private const val ROUTE_ALLERGIES = "allergies"
 private const val ROUTE_HISTORY = "history"
 private const val ROUTE_REMINDERS = "reminders"
+private const val ROUTE_ALLERGY_REPORT = "allergyReport"
 private const val ROUTE_MEDICATION_DETAIL = "medicationDetail/{nregistro}"
 private const val ROUTE_ADD_EDIT = "addEdit?nregistro={nregistro}&nombre={nombre}&fotoUrl={fotoUrl}&entryId={entryId}"
 private const val ROUTE_CREATE_SCHEDULE = "createSchedule?nregistro={nregistro}&nombre={nombre}&fotoUrl={fotoUrl}"
@@ -194,7 +196,13 @@ private fun MainNavHost(startDestination: String, initialScheduleId: String?, on
                 )
             }
             composable(ROUTE_ALLERGIES) {
-                AllergiesScreen(contentPadding = innerPadding)
+                AllergiesScreen(
+                    contentPadding = innerPadding,
+                    onOpenReport = { navController.navigate(ROUTE_ALLERGY_REPORT) },
+                )
+            }
+            composable(ROUTE_ALLERGY_REPORT) {
+                AllergyReportScreen(onBack = { navController.popBackStack() })
             }
             composable(ROUTE_HISTORY) {
                 HistoryHubScreen(
