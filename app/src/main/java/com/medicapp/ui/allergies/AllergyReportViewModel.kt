@@ -22,6 +22,9 @@ data class AllergyReportUiState(
     val language: ReportLanguage = ReportLanguage.ES,
     val profile: PatientProfile? = null,
     val groups: AllergyGroups = AllergyGroups(emptyList(), emptyList()),
+    /** Hasta que llegan los datos no se pinta nada: un "sin alergias" provisional engañaría al médico. */
+    val isLoaded: Boolean = false,
+    val profileSaveFailed: Boolean = false,
 )
 
 class AllergyReportViewModel(
@@ -30,10 +33,16 @@ class AllergyReportViewModel(
 ) : ViewModel() {
 
     private val language = MutableStateFlow(ReportLanguage.ES)
+    private val profileSaveFailed = MutableStateFlow(false)
 
     val uiState: StateFlow<AllergyReportUiState> =
-        combine(language, profileRepository.observe(), allergyRepository.getAll()) { language, profile, allergies ->
-            AllergyReportUiState(language, profile, AllergyGroups.of(allergies))
+        combine(
+            language,
+            profileRepository.observe(),
+            allergyRepository.getAll(),
+            profileSaveFailed,
+        ) { language, profile, allergies, saveFailed ->
+            AllergyReportUiState(language, profile, AllergyGroups.of(allergies), isLoaded = true, profileSaveFailed = saveFailed)
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), AllergyReportUiState())
 
     fun onLanguageSelected(selected: ReportLanguage) {
@@ -43,7 +52,11 @@ class AllergyReportViewModel(
     fun saveProfile(nombre: String, fechaNacimiento: LocalDate?) {
         val trimmed = nombre.trim()
         if (trimmed.isEmpty()) return
-        viewModelScope.launch { profileRepository.save(PatientProfile(trimmed, fechaNacimiento)) }
+        profileSaveFailed.value = false
+        viewModelScope.launch {
+            runCatching { profileRepository.save(PatientProfile(trimmed, fechaNacimiento)) }
+                .onFailure { profileSaveFailed.value = true }
+        }
     }
 
     companion object {

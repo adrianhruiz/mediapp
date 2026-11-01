@@ -16,6 +16,8 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Assert.assertNull
 import org.junit.Before
 import org.junit.Test
@@ -53,6 +55,35 @@ class AllergyReportViewModelTest {
         assertNull(state.profile)
         assertEquals(listOf("2"), state.groups.families.map { it.id })
         assertEquals(listOf("3", "1"), state.groups.ingredients.map { it.id })
+    }
+
+    @Test
+    fun `the report is not shown as empty before the data arrives`() = runTest(dispatcher) {
+        val viewModel = AllergyReportViewModel(FakeAllergyRepository(allergies), FakeProfileRepository())
+
+        assertFalse(viewModel.uiState.value.isLoaded)
+
+        backgroundScope.launch { viewModel.uiState.collect {} }
+        advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.isLoaded)
+    }
+
+    @Test
+    fun `a failed save is reported and a later successful one clears it`() = runTest(dispatcher) {
+        val profileRepository = FakeProfileRepository().apply { failNextSave = true }
+        val viewModel = AllergyReportViewModel(FakeAllergyRepository(allergies), profileRepository)
+        backgroundScope.launch { viewModel.uiState.collect {} }
+
+        viewModel.saveProfile("Ana", null)
+        advanceUntilIdle()
+        assertTrue(viewModel.uiState.value.profileSaveFailed)
+        assertNull(profileRepository.observe().first())
+
+        viewModel.saveProfile("Ana", null)
+        advanceUntilIdle()
+        assertFalse(viewModel.uiState.value.profileSaveFailed)
+        assertEquals(PatientProfile("Ana", null), profileRepository.observe().first())
     }
 
     @Test

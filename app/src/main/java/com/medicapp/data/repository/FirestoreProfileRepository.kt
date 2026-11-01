@@ -27,8 +27,9 @@ class FirestoreProfileRepository(
     override fun observe(): Flow<PatientProfile?> = callbackFlow {
         val registration = userDocument().addSnapshotListener { snapshot, error ->
             if (error != null) {
+                // No se manda null: el informe lo tomaría por un perfil sin rellenar y volvería a
+                // pedir los datos. Se queda con lo último que llegó.
                 Log.w("ProfileRepository", "Profile listener failed", error)
-                trySend(null)
                 return@addSnapshotListener
             }
             trySend(snapshot?.toPatientProfile())

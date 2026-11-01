@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.DisplayMode
@@ -81,6 +82,22 @@ fun AllergyReportScreen(
                 selected = uiState.language == ReportLanguage.EN,
                 onClick = { viewModel.onLanguageSelected(ReportLanguage.EN) },
                 label = { Text("English") },
+            )
+        }
+
+        if (!uiState.isLoaded) {
+            Row(modifier = Modifier.fillMaxWidth().padding(32.dp), horizontalArrangement = Arrangement.Center) {
+                CircularProgressIndicator()
+            }
+            return@Column
+        }
+
+        if (uiState.profileSaveFailed) {
+            Text(
+                "No se han podido guardar los datos del paciente. Inténtalo de nuevo.",
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.padding(top = 16.dp),
             )
         }
 
