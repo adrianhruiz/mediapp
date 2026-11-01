@@ -52,6 +52,7 @@ private const val ROUTE_MEDICATION_DETAIL = "medicationDetail/{nregistro}"
 private const val ROUTE_ADD_EDIT = "addEdit?nregistro={nregistro}&nombre={nombre}&fotoUrl={fotoUrl}&entryId={entryId}"
 private const val ROUTE_CREATE_SCHEDULE = "createSchedule?nregistro={nregistro}&nombre={nombre}&fotoUrl={fotoUrl}"
 private const val ROUTE_SCHEDULE_DETAIL = "scheduleDetail/{scheduleId}"
+private const val ROUTE_EDIT_SCHEDULE = "editSchedule/{scheduleId}"
 
 /** Pestañas de la barra inferior. Recordatorios ya no es pestaña: se abre desde Hoy. */
 internal data class BottomTab(val route: String, val label: String, val icon: ImageVector)
@@ -217,7 +218,19 @@ private fun MainNavHost(startDestination: String, initialScheduleId: String?, on
                 route = ROUTE_SCHEDULE_DETAIL,
                 arguments = listOf(navArgument("scheduleId") { type = NavType.StringType }),
             ) {
-                ScheduleDetailScreen(onBack = { navController.popBackStack() })
+                ScheduleDetailScreen(
+                    onBack = { navController.popBackStack() },
+                    onEdit = { scheduleId -> navController.navigate("editSchedule/${encode(scheduleId)}") },
+                )
+            }
+            composable(
+                route = ROUTE_EDIT_SCHEDULE,
+                arguments = listOf(navArgument("scheduleId") { type = NavType.StringType }),
+            ) {
+                CreateScheduleScreen(
+                    onDone = { navController.popBackStack() },
+                    onCancel = { navController.popBackStack() },
+                )
             }
             composable(
                 route = ROUTE_CREATE_SCHEDULE,

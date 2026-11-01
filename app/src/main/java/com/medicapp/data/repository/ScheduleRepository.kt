@@ -9,6 +9,13 @@ data class ScheduleWithDoses(val schedule: MedicationSchedule, val doses: List<M
 /** Una toma junto a la pauta de la que sale, para pintarla sin otra consulta. */
 data class ScheduledDose(val schedule: MedicationSchedule, val dose: MedicationDose)
 
+/** Lo que cambia al editar una pauta: las tomas pendientes que se quitan y las que se crean, para mover sus alarmas. */
+data class ScheduleEditResult(
+    val schedule: MedicationSchedule,
+    val removedDoseIds: List<String>,
+    val newDoses: List<MedicationDose>,
+)
+
 interface ScheduleRepository {
 
     /**
@@ -45,6 +52,20 @@ interface ScheduleRepository {
         reasonId: String,
         reasonNombre: String,
     ): ScheduleWithDoses
+
+    /**
+     * Cambia frecuencia, número de tomas, hora de la próxima toma y motivo de una pauta activa.
+     * Las tomas hechas se conservan y las pendientes se sustituyen (ver `ScheduleEditPlanner`).
+     * Devuelve null si la pauta ya no está activa o el total no deja ninguna toma por hacer.
+     */
+    suspend fun updateSchedule(
+        scheduleId: String,
+        intervalHours: Int,
+        totalDoses: Int,
+        nextDoseAtMillis: Long,
+        reasonId: String,
+        reasonNombre: String,
+    ): ScheduleEditResult?
 
     suspend fun markDoseTaken(scheduleId: String, doseId: String, historyEntryId: String)
 

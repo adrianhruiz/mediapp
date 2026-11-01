@@ -8,6 +8,7 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
 import com.medicapp.domain.DoseScheduleCalculator
 import com.medicapp.domain.PendingDoseCounter
+import com.medicapp.domain.ScheduleEditPlanner
 import com.medicapp.model.DoseStatus
 import com.medicapp.model.MedicationDose
 import com.medicapp.model.MedicationSchedule
@@ -293,6 +294,109 @@ class FirestoreScheduleRepository(
     }
 
     /**
+     * Va en una transacción y no en un lote: si una toma se marca desde la notificación mientras
+     * se edita, Firestore repite la edición con la toma ya hecha en vez de borrarla como
+     * pendiente. Por eso editar necesita conexión, a diferencia de crear.
+     *
+     * Las tomas de una pauta son pocas y aquí hacen falta todas: las hechas para numerar por
+     * hora y las pendientes para sustituirlas. Como la transacción no puede consultar, la lista se
+     * pide antes, junto con [EDIT_VERSION_FIELD]; si otra edición (un doble toque en Guardar) la
+     * cambia entre medias, la lista ya no vale y se vuelve a pedir en lugar de seguir con ella.
+     */
+    override suspend fun updateSchedule(
+        scheduleId: String,
+        intervalHours: Int,
+        totalDoses: Int,
+        nextDoseAtMillis: Long,
+        reasonId: String,
+        reasonNombre: String,
+    ): ScheduleEditResult? {
+        val scheduleRef = schedulesCollection().document(scheduleId)
+        repeat(MAX_EDIT_ATTEMPTS) {
+            val editVersion = scheduleRef.get().await().editVersion()
+            val doseRefs = dosesCollection(scheduleId).get().await().documents.map { it.reference }
+            val outcome = runEditTransaction(
+                scheduleRef, doseRefs, editVersion, scheduleId,
+                intervalHours, totalDoses, nextDoseAtMillis, reasonId, reasonNombre,
+            )
+            if (outcome !== StaleDoseList) return outcome as ScheduleEditResult?
+        }
+        error("La pauta $scheduleId cambió durante la edición demasiadas veces")
+    }
+
+    /** Devuelve [StaleDoseList] si otra edición se coló después de pedir las tomas. */
+    private suspend fun runEditTransaction(
+        scheduleRef: DocumentReference,
+        doseRefs: List<DocumentReference>,
+        editVersion: Long,
+        scheduleId: String,
+        intervalHours: Int,
+        totalDoses: Int,
+        nextDoseAtMillis: Long,
+        reasonId: String,
+        reasonNombre: String,
+    ): Any? =
+        firestore.runTransaction { transaction ->
+            val scheduleSnapshot = transaction.get(scheduleRef)
+            if (scheduleSnapshot.editVersion() != editVersion) return@runTransaction StaleDoseList
+            val schedule = scheduleSnapshot.toMedicationSchedule()
+            if (schedule?.status != ScheduleStatus.ACTIVE) return@runTransaction null
+            val doses = doseRefs.mapNotNull { transaction.get(it).toMedicationDose(scheduleId) }
+            val plan = ScheduleEditPlanner.plan(doses, intervalHours, totalDoses, nextDoseAtMillis)
+                ?: return@runTransaction null
+
+            val removed = doses.filter { it.status == DoseStatus.PENDING }
+            removed.forEach { transaction.delete(dosesCollection(scheduleId).document(it.id)) }
+            plan.renumberedKeptDoses.forEach { (doseId, doseNumber) ->
+                transaction.update(dosesCollection(scheduleId).document(doseId), "doseNumber", doseNumber)
+            }
+            val newDoses = plan.newDoses.map { planned ->
+                val doseRef = dosesCollection(scheduleId).document()
+                transaction.set(
+                    doseRef,
+                    mapOf(
+                        "doseNumber" to planned.doseNumber,
+                        "scheduledAtMillis" to planned.scheduledAtMillis,
+                        "status" to DoseStatus.PENDING.name,
+                    ),
+                )
+                MedicationDose(
+                    id = doseRef.id,
+                    scheduleId = scheduleId,
+                    doseNumber = planned.doseNumber,
+                    scheduledAtMillis = planned.scheduledAtMillis,
+                    status = DoseStatus.PENDING,
+                    takenAtMillis = null,
+                    historyEntryId = null,
+                )
+            }
+            transaction.update(
+                scheduleRef,
+                mapOf(
+                    "intervalHours" to intervalHours,
+                    "totalDoses" to totalDoses,
+                    "startAtMillis" to plan.startAtMillis,
+                    "reasonId" to reasonId,
+                    "reasonNombre" to reasonNombre,
+                    PendingDoseCounter.FIELD to newDoses.size,
+                    END_AT_FIELD to plan.endAtMillis,
+                    EDIT_VERSION_FIELD to editVersion + 1,
+                ),
+            )
+            ScheduleEditResult(
+                schedule = schedule.copy(
+                    intervalHours = intervalHours,
+                    totalDoses = totalDoses,
+                    startAtMillis = plan.startAtMillis,
+                    reasonId = reasonId,
+                    reasonNombre = reasonNombre,
+                ),
+                removedDoseIds = removed.map { it.id },
+                newDoses = newDoses,
+            )
+        }.await()
+
+    /**
      * La dosis y el contador de la pauta se escriben en el mismo lote, así que marcar una dosis
      * no necesita consultar las demás para saber si la pauta ha terminado.
      *
@@ -379,6 +483,16 @@ class FirestoreScheduleRepository(
     companion object {
         /** Hora de la última toma de la pauta, para filtrar pautas por fechas en la consulta. */
         const val END_AT_FIELD = "endAtMillis"
+
+        /** Cuenta de ediciones de la pauta, para detectar dos ediciones a la vez. */
+        private const val EDIT_VERSION_FIELD = "editVersion"
+
+        private const val MAX_EDIT_ATTEMPTS = 3
+
+        /** Marca de que la lista de tomas pedida antes de la transacción quedó obsoleta. */
+        private object StaleDoseList
+
+        private fun DocumentSnapshot.editVersion(): Long = getLong(EDIT_VERSION_FIELD) ?: 0L
 
         private const val RECENT_SCHEDULES_TO_BACKFILL = 20L
     }

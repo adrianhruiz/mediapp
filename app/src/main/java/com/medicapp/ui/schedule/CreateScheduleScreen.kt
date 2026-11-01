@@ -94,7 +94,7 @@ fun CreateScheduleScreen(
     ) {
         ScreenHeader(
             title = MedicationNames.split(uiState.nombreMedicamento).first,
-            eyebrow = "Nueva pauta",
+            eyebrow = if (uiState.isEditing) "Editar pauta" else "Nueva pauta",
             onBack = onCancel,
             modifier = Modifier.padding(bottom = 16.dp),
         )
@@ -144,10 +144,16 @@ fun CreateScheduleScreen(
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
             modifier = Modifier.fillMaxWidth().padding(top = 24.dp),
             singleLine = true,
+            isError = uiState.totalBelowTaken,
+            supportingText = if (uiState.keptDoseCount > 0) {
+                { Text("Ya llevas ${uiState.keptDoseCount}: el total tiene que ser mayor") }
+            } else {
+                null
+            },
         )
 
         Text(
-            "Hora de la primera toma",
+            startTimeLabel(uiState),
             style = MaterialTheme.typography.titleMedium,
             modifier = Modifier.padding(top = 24.dp),
         )
@@ -186,6 +192,15 @@ fun CreateScheduleScreen(
             }
         }
 
+        if (uiState.saveFailed) {
+            Text(
+                "No se han podido guardar los cambios. Editar una pauta necesita conexión.",
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.padding(top = 16.dp),
+            )
+        }
+
         GelButton(
             onClick = { viewModel.save(context) },
             enabled = uiState.reasonInput.isNotBlank() &&
@@ -194,7 +209,7 @@ fun CreateScheduleScreen(
                 !uiState.hasDuplicateActiveSchedule,
             modifier = Modifier.fillMaxWidth().padding(top = 24.dp),
         ) {
-            Text("Guardar pauta")
+            Text(if (uiState.isEditing) "Guardar cambios" else "Guardar pauta")
         }
         SecondaryButton(onClick = onCancel, modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
             Text("Cancelar")
@@ -210,7 +225,7 @@ fun CreateScheduleScreen(
         )
         AlertDialog(
             onDismissRequest = { showTimePicker = false },
-            title = { Text("Hora de la primera toma") },
+            title = { Text(startTimeLabel(uiState)) },
             text = { TimePicker(state = timePickerState) },
             confirmButton = {
                 TextButton(onClick = {
@@ -253,6 +268,9 @@ fun CreateScheduleScreen(
     }
 }
 
+private fun startTimeLabel(uiState: CreateScheduleUiState) =
+    if (uiState.isEditing) "Hora de la próxima toma" else "Hora de la primera toma"
+
 private val previewHour = SimpleDateFormat("HH:mm", Locale.forLanguageTag("es-ES"))
 private val previewDay = SimpleDateFormat("EEEE d MMM 'a las' HH:mm", Locale.forLanguageTag("es-ES"))
 
@@ -267,12 +285,15 @@ private const val MAX_PREVIEW_CELLS = 6
 @Composable
 private fun FirstDayPreview(uiState: CreateScheduleUiState) {
     val interval = uiState.intervalHoursInput.toIntOrNull()?.takeIf { it > 0 } ?: return
-    val total = uiState.totalDosesInput.toIntOrNull()?.takeIf { it > 0 } ?: return
+    // Al editar solo se crean las tomas que faltan; las hechas se quedan como están.
+    val total = uiState.totalDosesInput.toIntOrNull()
+        ?.minus(uiState.keptDoseCount)
+        ?.takeIf { it > 0 } ?: return
     val times = DoseScheduleCalculator.computeDoseTimes(uiState.startAtMillis, interval, total)
     val firstDay = times.takeWhile { it < uiState.startAtMillis + 24 * 3_600_000L }.take(MAX_PREVIEW_CELLS)
     val pill = PillStyles.forMedication(uiState.nregistro, uiState.nombreMedicamento)
 
-    Eyebrow("Primer día", modifier = Modifier.padding(top = 24.dp, bottom = 8.dp))
+    Eyebrow(if (uiState.isEditing) "Próximas 24 h" else "Primer día", modifier = Modifier.padding(top = 24.dp, bottom = 8.dp))
     FoilCard(modifier = Modifier.fillMaxWidth()) {
         FlowRow(
             modifier = Modifier.fillMaxWidth(),
@@ -291,7 +312,7 @@ private fun FirstDayPreview(uiState: CreateScheduleUiState) {
         }
     }
     Text(
-        "$total ${if (total == 1) "toma" else "tomas"} · la última el ${previewDay.format(Date(times.last())).replace(".", "")}",
+        "$total ${if (total == 1) "toma" else "tomas"}${if (uiState.isEditing) " por hacer" else ""} · la última el ${previewDay.format(Date(times.last())).replace(".", "")}",
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.padding(top = 8.dp),

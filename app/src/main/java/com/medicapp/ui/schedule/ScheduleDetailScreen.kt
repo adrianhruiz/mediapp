@@ -49,6 +49,7 @@ import java.util.Locale
 @Composable
 fun ScheduleDetailScreen(
     onBack: () -> Unit,
+    onEdit: (scheduleId: String) -> Unit,
     viewModel: ScheduleDetailViewModel = viewModel(factory = ScheduleDetailViewModel.Factory),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -91,10 +92,13 @@ fun ScheduleDetailScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 if (schedule.status == ScheduleStatus.ACTIVE) {
-                    SecondaryButton(
-                        onClick = { viewModel.closeSchedule(context) },
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
                         modifier = Modifier.padding(top = 12.dp),
-                    ) { Text("Cerrar periodo") }
+                    ) {
+                        SecondaryButton(onClick = { onEdit(schedule.id) }) { Text("Editar pauta") }
+                        SecondaryButton(onClick = { viewModel.closeSchedule(context) }) { Text("Cerrar periodo") }
+                    }
                 }
             }
 

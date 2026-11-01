@@ -1,6 +1,7 @@
 package com.medicapp.data.repository
 
 import com.medicapp.domain.DoseScheduleCalculator
+import com.medicapp.domain.ScheduleEditPlanner
 import com.medicapp.model.DoseStatus
 import com.medicapp.model.MedicationDose
 import com.medicapp.model.MedicationSchedule
@@ -20,6 +21,9 @@ class FakeScheduleRepository : ScheduleRepository {
     private var nextScheduleId = 1
     private var nextDoseId = 1
 
+    /** Fin guardado de las pautas editadas, que ya no sale de la fórmula, como en Firestore. */
+    private val editedEndAt = mutableMapOf<String, Long>()
+
     private fun dosesFlow(scheduleId: String) =
         dosesByScheduleFlow.getOrPut(scheduleId) { MutableStateFlow(emptyList()) }
 
@@ -31,7 +35,7 @@ class FakeScheduleRepository : ScheduleRepository {
     override fun observeDosesBetween(fromMillis: Long, toMillis: Long): Flow<List<ScheduledDose>> =
         schedulesFlow.flatMapLatest { schedules ->
             val inRange = schedules.filter { schedule ->
-                val endAt = DoseScheduleCalculator.endAtMillis(
+                val endAt = editedEndAt[schedule.id] ?: DoseScheduleCalculator.endAtMillis(
                     schedule.startAtMillis,
                     schedule.intervalHours,
                     schedule.totalDoses,
@@ -118,6 +122,46 @@ class FakeScheduleRepository : ScheduleRepository {
         schedulesFlow.value = schedulesFlow.value + schedule
         dosesFlow(scheduleId).value = doses
         return ScheduleWithDoses(schedule, doses)
+    }
+
+    override suspend fun updateSchedule(
+        scheduleId: String,
+        intervalHours: Int,
+        totalDoses: Int,
+        nextDoseAtMillis: Long,
+        reasonId: String,
+        reasonNombre: String,
+    ): ScheduleEditResult? {
+        val schedule = getSchedule(scheduleId)?.takeIf { it.status == ScheduleStatus.ACTIVE } ?: return null
+        val doses = dosesFlow(scheduleId).value
+        val plan = ScheduleEditPlanner.plan(doses, intervalHours, totalDoses, nextDoseAtMillis) ?: return null
+
+        val removed = doses.filter { it.status == DoseStatus.PENDING }
+        val kept = (doses - removed.toSet()).map { dose ->
+            plan.renumberedKeptDoses[dose.id]?.let { dose.copy(doseNumber = it) } ?: dose
+        }
+        val newDoses = plan.newDoses.map { planned ->
+            MedicationDose(
+                id = "dose-${nextDoseId++}",
+                scheduleId = scheduleId,
+                doseNumber = planned.doseNumber,
+                scheduledAtMillis = planned.scheduledAtMillis,
+                status = DoseStatus.PENDING,
+                takenAtMillis = null,
+                historyEntryId = null,
+            )
+        }
+        val updated = schedule.copy(
+            intervalHours = intervalHours,
+            totalDoses = totalDoses,
+            startAtMillis = plan.startAtMillis,
+            reasonId = reasonId,
+            reasonNombre = reasonNombre,
+        )
+        editedEndAt[scheduleId] = plan.endAtMillis
+        dosesFlow(scheduleId).value = (kept + newDoses).sortedBy { it.doseNumber }
+        schedulesFlow.value = schedulesFlow.value.map { if (it.id == scheduleId) updated else it }
+        return ScheduleEditResult(updated, removed.map { it.id }, newDoses)
     }
 
     override suspend fun markDoseTaken(scheduleId: String, doseId: String, historyEntryId: String) {

@@ -151,7 +151,11 @@ private fun BackupSchedule.toFirestore() = mapOf(
     "intervalHours" to intervalHours,
     "totalDoses" to totalDoses,
     "startAtMillis" to startAtMillis,
-    FirestoreScheduleRepository.END_AT_FIELD to DoseScheduleCalculator.endAtMillis(startAtMillis, intervalHours, totalDoses),
+    // Una pauta editada no acaba donde dice la fórmula: manda la última de sus tomas.
+    FirestoreScheduleRepository.END_AT_FIELD to (
+        doses.maxOfOrNull { it.scheduledAtMillis }
+            ?: DoseScheduleCalculator.endAtMillis(startAtMillis, intervalHours, totalDoses)
+        ),
     "reasonId" to reasonId,
     "reasonNombre" to reasonNombre,
     "status" to status,
