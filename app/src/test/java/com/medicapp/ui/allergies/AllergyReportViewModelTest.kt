@@ -70,6 +70,28 @@ class AllergyReportViewModelTest {
     }
 
     @Test
+    fun `a failed allergy load is reported as an error, never as no allergies`() = runTest(dispatcher) {
+        val allergyRepository = FakeAllergyRepository(allergies).apply { failLoading(IllegalStateException("denied")) }
+        val viewModel = AllergyReportViewModel(allergyRepository, FakeProfileRepository())
+        backgroundScope.launch { viewModel.uiState.collect {} }
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertTrue(state.allergiesLoadFailed)
+        assertTrue(state.isLoaded)
+        assertTrue(state.groups.families.isEmpty() && state.groups.ingredients.isEmpty())
+    }
+
+    @Test
+    fun `a successful allergy load is not reported as an error`() = runTest(dispatcher) {
+        val viewModel = AllergyReportViewModel(FakeAllergyRepository(allergies), FakeProfileRepository())
+        backgroundScope.launch { viewModel.uiState.collect {} }
+        advanceUntilIdle()
+
+        assertFalse(viewModel.uiState.value.allergiesLoadFailed)
+    }
+
+    @Test
     fun `a failed save is reported and a later successful one clears it`() = runTest(dispatcher) {
         val profileRepository = FakeProfileRepository().apply { failNextSave = true }
         val viewModel = AllergyReportViewModel(FakeAllergyRepository(allergies), profileRepository)

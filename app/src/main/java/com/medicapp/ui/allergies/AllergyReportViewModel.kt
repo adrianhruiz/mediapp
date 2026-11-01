@@ -14,7 +14,9 @@ import com.medicapp.model.PatientProfile
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.LocalDate
@@ -26,6 +28,8 @@ data class AllergyReportUiState(
     /** Hasta que llegan los datos no se pinta nada: un "sin alergias" provisional engañaría al médico. */
     val isLoaded: Boolean = false,
     val profileSaveFailed: Boolean = false,
+    /** La lectura de alergias falló: el informe no se pinta, porque saldría como "sin alergias". */
+    val allergiesLoadFailed: Boolean = false,
 )
 
 class AllergyReportViewModel(
@@ -40,10 +44,19 @@ class AllergyReportViewModel(
         combine(
             language,
             profileRepository.observe(),
-            allergyRepository.getAll(),
+            allergyRepository.getAllOrThrow()
+                .map { Result.success(it) }
+                .catch { emit(Result.failure(it)) },
             profileSaveFailed,
         ) { language, profile, allergies, saveFailed ->
-            AllergyReportUiState(language, profile, AllergyGroups.of(allergies), isLoaded = true, profileSaveFailed = saveFailed)
+            AllergyReportUiState(
+                language = language,
+                profile = profile,
+                groups = AllergyGroups.of(allergies.getOrDefault(emptyList())),
+                isLoaded = true,
+                profileSaveFailed = saveFailed,
+                allergiesLoadFailed = allergies.isFailure,
+            )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), AllergyReportUiState())
 
     fun onLanguageSelected(selected: ReportLanguage) {

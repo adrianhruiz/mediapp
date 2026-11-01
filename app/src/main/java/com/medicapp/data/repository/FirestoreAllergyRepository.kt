@@ -14,6 +14,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.tasks.await
 
 /** Un lote de Firestore admite 500 operaciones; cada reescritura de id gasta dos (alta y baja). */
@@ -32,25 +33,31 @@ class FirestoreAllergyRepository(
         .document(userId)
         .collection("allergies")
 
-    /** Lo miran a la vez la pantalla de alergias y la ficha de medicamento. */
-    private val allergies: Flow<List<Allergy>> =
-        authRepository.sharedPerSession(scope, emptyValue = emptyList()) { userId ->
+    /**
+     * Lo miran a la vez la pantalla de alergias y la ficha de medicamento. Comparte un [Result]
+     * porque una excepción aquí rompería el flujo compartido de todos; cada lector decide qué
+     * hacer con el fallo.
+     */
+    private val allergies: Flow<Result<List<Allergy>>> =
+        authRepository.sharedPerSession(scope, emptyValue = Result.success(emptyList())) { userId ->
             callbackFlow {
                 val collection = collectionFor(userId)
                 val registration = collection.addSnapshotListener { snapshot, error ->
                     if (error != null) {
                         Log.w("AllergyRepository", "Allergies listener failed", error)
-                        trySend(emptyList())
+                        trySend(Result.failure(error))
                         return@addSnapshotListener
                     }
-                    trySend(snapshot?.documents.orEmpty().mapNotNull { it.toAllergy() })
+                    trySend(Result.success(snapshot?.documents.orEmpty().mapNotNull { it.toAllergy() }))
                     if (snapshot != null) migrateLegacyIds(snapshot, collection)
                 }
                 awaitClose { registration.remove() }
             }
         }
 
-    override fun getAll(): Flow<List<Allergy>> = allergies
+    override fun getAll(): Flow<List<Allergy>> = allergies.map { it.getOrDefault(emptyList()) }
+
+    override fun getAllOrThrow(): Flow<List<Allergy>> = allergies.map { it.getOrThrow() }
 
     override suspend fun addPrincipioActivo(id: Int, nombre: String) {
         collection().document(principioActivoDocumentId(id)).set(principioActivoData(id, nombre)).await()
