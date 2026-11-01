@@ -10,6 +10,8 @@ import com.medicapp.data.repository.FakeAllergyRepository
 import com.medicapp.data.repository.MedicationCatalogRepository
 import com.medicapp.model.Allergy
 import com.medicapp.model.AllergyType
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.assertCountEquals
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -55,5 +57,22 @@ class AllergiesScreenTest {
 
         composeRule.onNodeWithText("J01C").assertIsDisplayed()
         composeRule.onNodeWithText("J01CA").assertIsDisplayed()
+    }
+
+    @Test
+    fun `allergies are listed under one header per kind instead of a label on every row`() {
+        setContent(
+            listOf(
+                Allergy(id = "1", tipo = AllergyType.PRINCIPIO_ACTIVO, principioActivoId = 1, principioActivoNombre = "BENCILPENICILINA"),
+                Allergy(id = "2", tipo = AllergyType.PRINCIPIO_ACTIVO, principioActivoId = 2, principioActivoNombre = "METAMIZOL MAGNESICO"),
+                Allergy(id = "3", tipo = AllergyType.FAMILIA, atcCodigo = "M01A", atcNombre = "PRODUCTOS ANTIINFLAMATORIOS"),
+            ),
+        )
+
+        composeRule.onNodeWithText("FAMILIAS").assertIsDisplayed()
+        composeRule.onNodeWithText("COMPONENTES ACTIVOS").assertIsDisplayed()
+        composeRule.onAllNodesWithText("COMPONENTE ACTIVO").assertCountEquals(0)
+        composeRule.onNodeWithText("Bencilpenicilina").assertIsDisplayed()
+        composeRule.onNodeWithText("M01A").assertIsDisplayed()
     }
 }

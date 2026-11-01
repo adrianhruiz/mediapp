@@ -27,6 +27,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
@@ -38,7 +39,10 @@ import com.medicapp.model.AllergyType
 import com.medicapp.model.AtcCode
 import com.medicapp.model.PrincipioActivo
 import com.medicapp.ui.components.AddedChip
-import com.medicapp.ui.components.Eyebrow
+import com.medicapp.domain.AllergyGroups
+import com.medicapp.ui.components.GroupHeader
+import com.medicapp.ui.components.GroupedList
+import com.medicapp.ui.components.GroupedRow
 import com.medicapp.ui.components.MedicationNames
 import com.medicapp.ui.components.ScreenHeader
 import com.medicapp.ui.components.SearchHelpButton
@@ -71,10 +75,10 @@ fun AllergiesScreen(
                 modifier = Modifier.padding(top = 8.dp, bottom = 16.dp),
             )
         } else {
+            val groups = remember(allergies) { AllergyGroups.of(allergies) }
             Column(modifier = Modifier.padding(top = 8.dp, bottom = 16.dp)) {
-                allergies.forEach { allergy ->
-                    AllergyRow(allergy = allergy, onDelete = { viewModel.delete(allergy) })
-                }
+                AllergyGroup("Familias", groups.families, onDelete = viewModel::delete)
+                AllergyGroup("Componentes activos", groups.ingredients, onDelete = viewModel::delete)
             }
         }
 
@@ -210,30 +214,30 @@ private fun CacheNotice() {
     )
 }
 
+/** Una cabecera por tipo y filas compactas: el tipo ya no se repite en cada alergia. */
 @Composable
-private fun AllergyRow(allergy: Allergy, onDelete: () -> Unit) {
-    Card(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(12.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
-                Eyebrow(if (allergy.tipo == AllergyType.PRINCIPIO_ACTIVO) "Componente activo" else "Familia")
-                Text(
-                    MedicationNames.pretty(allergy.principioActivoNombre ?: allergy.atcNombre.orEmpty()),
-                    style = MaterialTheme.typography.titleLarge,
-                )
-                allergy.atcCodigo?.let { codigo ->
+private fun AllergyGroup(title: String, allergies: List<Allergy>, onDelete: (Allergy) -> Unit) {
+    if (allergies.isEmpty()) return
+    GroupHeader(title, modifier = Modifier.padding(top = 12.dp))
+    GroupedList {
+        allergies.forEachIndexed { index, allergy ->
+            GroupedRow(divider = index > 0) {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        codigo,
-                        style = MaterialTheme.typography.bodySmall.copy(fontFamily = DmMono),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        MedicationNames.pretty(allergy.principioActivoNombre ?: allergy.atcNombre.orEmpty()),
+                        style = MaterialTheme.typography.bodyLarge,
                     )
+                    allergy.atcCodigo?.let { codigo ->
+                        Text(
+                            codigo,
+                            style = MaterialTheme.typography.bodySmall.copy(fontFamily = DmMono),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                 }
-            }
-            IconButton(onClick = onDelete) {
-                Icon(Icons.Default.Delete, contentDescription = "Eliminar alergia")
+                IconButton(onClick = { onDelete(allergy) }) {
+                    Icon(Icons.Default.Delete, contentDescription = "Eliminar alergia")
+                }
             }
         }
     }
