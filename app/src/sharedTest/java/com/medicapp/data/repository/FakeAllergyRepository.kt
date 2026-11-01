@@ -65,6 +65,18 @@ class FakeAllergyRepository(
         allergiesFlow.value = porId.values.toList()
     }
 
+    override suspend fun setOfficialEnglishNameIfMissing(allergyId: String, nombreIngles: String) {
+        allergiesFlow.value = allergiesFlow.value.map {
+            if (it.id == allergyId && it.nombreIngles == null) it.copy(nombreIngles = nombreIngles, nombreInglesManual = false) else it
+        }
+    }
+
+    override suspend fun setEnglishName(allergyId: String, nombreIngles: String?, manual: Boolean) {
+        allergiesFlow.value = allergiesFlow.value.map {
+            if (it.id == allergyId) it.copy(nombreIngles = nombreIngles, nombreInglesManual = nombreIngles != null && manual) else it
+        }
+    }
+
     override suspend fun delete(allergyId: String) {
         allergiesFlow.value = allergiesFlow.value.filterNot { it.id == allergyId }
     }

@@ -18,6 +18,8 @@ data class ReportText(
     val ingredients: String,
     val noAllergies: String,
     val namesNote: String,
+    /** Marca de los nombres en inglés que escribió el propio paciente. */
+    val manualNote: String,
     private val months: List<String>,
 ) {
     /** Mes en letras: "03/12" se lee distinto a cada lado del Atlántico, "12 mar" no. */
@@ -34,6 +36,7 @@ data class ReportText(
             ingredients = "Principios activos",
             noAllergies = "No hay alergias a medicamentos registradas.",
             namesNote = "Los códigos ATC siguen la clasificación de la OMS.",
+            manualNote = "",
             months = listOf("ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sept", "oct", "nov", "dic"),
         )
 
@@ -46,7 +49,9 @@ data class ReportText(
             families = "Drug classes (ATC code)",
             ingredients = "Active substances",
             noAllergies = "No drug allergies recorded.",
-            namesNote = "Substance names are given in Spanish. ATC codes follow the WHO classification.",
+            namesNote = "English drug class names are the WHO ATC names (WHO Collaborating Centre for " +
+                "Drug Statistics Methodology, via ChEMBL). Names without an English translation are in Spanish.",
+            manualNote = "* English name entered by the patient, not an official translation.",
             months = listOf("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"),
         )
 

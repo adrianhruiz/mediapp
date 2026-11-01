@@ -15,6 +15,7 @@ import java.io.File
 import java.util.concurrent.TimeUnit
 
 private const val CIMA_BASE_URL = "https://cima.aemps.es/cima/rest/"
+private const val CHEMBL_BASE_URL = "https://www.ebi.ac.uk/chembl/api/data/"
 private const val CACHE_DIR_NAME = "cima_http_cache"
 private const val CACHE_SIZE_BYTES = 10L * 1024 * 1024
 
@@ -56,6 +57,22 @@ class NetworkModule(context: Context) {
         .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
         .build()
         .create(CimaApiService::class.java)
+
+    /**
+     * Cliente propio y sin los interceptores de CIMA: su cortacircuitos y su caché están pensados
+     * para CIMA, y un fallo de ChEMBL no debe abrir el circuito de la búsqueda de medicamentos.
+     */
+    val chemblApiService: ChemblApiService = Retrofit.Builder()
+        .baseUrl(CHEMBL_BASE_URL)
+        .client(
+            OkHttpClient.Builder()
+                .connectTimeout(15, TimeUnit.SECONDS)
+                .readTimeout(15, TimeUnit.SECONDS)
+                .build(),
+        )
+        .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
+        .build()
+        .create(ChemblApiService::class.java)
 
     private fun isOnline(): Boolean {
         val connectivityManager =
