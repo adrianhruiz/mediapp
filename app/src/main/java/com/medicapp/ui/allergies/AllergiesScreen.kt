@@ -5,9 +5,11 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -249,7 +251,7 @@ private fun AllergyGroup(title: String, allergies: List<Allergy>, onDelete: (All
 }
 
 @Composable
-private fun IngredientResultRow(item: PrincipioActivo, alreadyAdded: Boolean, onAdd: () -> Unit) {
+internal fun IngredientResultRow(item: PrincipioActivo, alreadyAdded: Boolean, onAdd: () -> Unit) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -261,7 +263,9 @@ private fun IngredientResultRow(item: PrincipioActivo, alreadyAdded: Boolean, on
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(item.nombre, style = MaterialTheme.typography.bodyLarge)
+            // El nombre se lleva el ancho sobrante y salta de línea: así no aplasta al chip.
+            Text(item.nombre, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+            Spacer(Modifier.width(8.dp))
             if (alreadyAdded) {
                 AddedChip("Ya añadida")
             } else {
@@ -272,7 +276,7 @@ private fun IngredientResultRow(item: PrincipioActivo, alreadyAdded: Boolean, on
 }
 
 @Composable
-private fun FamilyResultRow(item: AtcCode, alreadyAdded: Boolean, onAdd: () -> Unit) {
+internal fun FamilyResultRow(item: AtcCode, alreadyAdded: Boolean, onAdd: () -> Unit) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -284,10 +288,11 @@ private fun FamilyResultRow(item: AtcCode, alreadyAdded: Boolean, onAdd: () -> U
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Column {
+            Column(modifier = Modifier.weight(1f)) {
                 Text(item.nombre, style = MaterialTheme.typography.bodyLarge)
                 Text(item.codigo, style = MaterialTheme.typography.bodySmall)
             }
+            Spacer(Modifier.width(8.dp))
             if (alreadyAdded) {
                 AddedChip("Ya añadida")
             } else {
