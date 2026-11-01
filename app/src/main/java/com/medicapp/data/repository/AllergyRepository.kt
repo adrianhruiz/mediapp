@@ -22,4 +22,7 @@ interface AllergyRepository {
     suspend fun addFamilias(familias: List<AtcCode>)
 
     suspend fun delete(allergyId: String)
+
+    /** Guarda el nombre en inglés de una alergia; null lo borra. */
+    suspend fun setEnglishName(allergyId: String, nombreIngles: String?, manual: Boolean)
 }

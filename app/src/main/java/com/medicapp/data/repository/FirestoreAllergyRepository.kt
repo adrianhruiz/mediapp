@@ -94,6 +94,15 @@ class FirestoreAllergyRepository(
         collection().document(allergyId).delete().await()
     }
 
+    override suspend fun setEnglishName(allergyId: String, nombreIngles: String?, manual: Boolean) {
+        collection().document(allergyId).update(
+            mapOf(
+                ENGLISH_NAME_FIELD to (nombreIngles ?: FieldValue.delete()),
+                ENGLISH_NAME_MANUAL_FIELD to (if (nombreIngles != null && manual) true else FieldValue.delete()),
+            ),
+        ).await()
+    }
+
     /**
      * Pasa a la id determinista las alergias que se guardaron cuando la sorteaba Firestore.
      *
@@ -139,6 +148,9 @@ private fun familiaData(atcCodigo: String, atcNombre: String) = mapOf(
     "createdAt" to FieldValue.serverTimestamp(),
 )
 
+private const val ENGLISH_NAME_FIELD = "nombreIngles"
+private const val ENGLISH_NAME_MANUAL_FIELD = "nombreInglesManual"
+
 private fun DocumentSnapshot.toAllergy(): Allergy? {
     val tipoRaw = getString("tipo") ?: return null
     val tipo = runCatching { AllergyType.valueOf(tipoRaw) }.getOrNull() ?: return null
@@ -149,5 +161,7 @@ private fun DocumentSnapshot.toAllergy(): Allergy? {
         principioActivoNombre = getString("principioActivoNombre"),
         atcCodigo = getString("atcCodigo"),
         atcNombre = getString("atcNombre"),
+        nombreIngles = getString(ENGLISH_NAME_FIELD),
+        nombreInglesManual = getBoolean(ENGLISH_NAME_MANUAL_FIELD) ?: false,
     )
 }
