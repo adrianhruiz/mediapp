@@ -15,6 +15,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
@@ -59,10 +60,24 @@ fun LoginScreen(
             visualTransformation = PasswordVisualTransformation(),
             modifier = Modifier.fillMaxWidth(),
         )
+        TextButton(
+            onClick = viewModel::sendPasswordReset,
+            enabled = !uiState.isLoading,
+            modifier = Modifier.align(Alignment.End),
+        ) {
+            Text("¿Has olvidado la contraseña?")
+        }
         uiState.errorMessage?.let {
             Text(
                 it,
                 color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.padding(top = 8.dp),
+            )
+        }
+        uiState.infoMessage?.let {
+            Text(
+                it,
+                style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.padding(top = 8.dp),
             )
         }

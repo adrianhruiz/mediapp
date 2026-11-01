@@ -12,6 +12,7 @@ class FakeAuthRepository(
     var shouldFailAuth: Boolean = false
     val signUpCalls: MutableList<Pair<String, String>> = mutableListOf()
     val signInCalls: MutableList<Pair<String, String>> = mutableListOf()
+    val passwordResetCalls: MutableList<String> = mutableListOf()
 
     override val currentUserId: String?
         get() = userIdFlow.value
@@ -28,6 +29,11 @@ class FakeAuthRepository(
         if (shouldFailAuth) error("Simulated sign in failure")
         signInCalls.add(email to password)
         userIdFlow.value = "test-user"
+    }
+
+    override suspend fun sendPasswordReset(email: String) {
+        if (shouldFailAuth) error("Simulated password reset failure")
+        passwordResetCalls.add(email)
     }
 
     override fun signOut() {
