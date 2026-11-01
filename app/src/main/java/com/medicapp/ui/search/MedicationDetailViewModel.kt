@@ -38,6 +38,9 @@ data class MedicationDetailUiState(
     /** Un medicamento desrecomendado por alergia no puede añadirse al historial. */
     val canAddToHistory: Boolean get() = medication != null && matches.isEmpty()
 
+    /** Tampoco puede programarse como pauta: sería recordar tomar algo que no se debe. */
+    val canCreateSchedule: Boolean get() = canAddToHistory
+
     val isInHistory: Boolean get() = historyReasons.isNotEmpty()
 }
 
