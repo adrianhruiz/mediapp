@@ -36,4 +36,14 @@ class ChemblAtcTest {
         assertNull(ChemblAtc.englishName("N02BB", metamizole.copy(level4Description = "  ")))
         assertNull(ChemblAtc.englishName("N02BB", metamizole.copy(level4Description = null)))
     }
+
+    @Test
+    fun `only well formed ATC codes have a level`() {
+        assertEquals(1, ChemblAtc.levelOf("N"))
+        assertEquals(5, ChemblAtc.levelOf("N02BB02"))
+        assertNull(ChemblAtc.levelOf("../x"))
+        assertNull(ChemblAtc.levelOf("N2B"))
+        assertNull(ChemblAtc.levelOf("N02BB0A"))
+        assertNull(ChemblAtc.levelOf("1"))
+    }
 }

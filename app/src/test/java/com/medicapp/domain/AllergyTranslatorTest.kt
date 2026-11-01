@@ -7,10 +7,13 @@ import com.medicapp.model.AllergyType
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -26,7 +29,8 @@ class AllergyTranslatorTest {
         block: suspend () -> Unit,
     ) {
         val job = launch { AllergyTranslator(repository, source).start(this) }
-        advanceUntilIdle()
+        // runCurrent y no advanceUntilIdle: este adelantaría el reloj y haría ya los reintentos.
+        runCurrent()
         block()
         job.cancel()
     }
@@ -92,6 +96,56 @@ class AllergyTranslatorTest {
         withTranslator(repository, source) {
             assertEquals("NSAIDs", repository.allergies.single().nombreIngles)
             assertEquals(emptyList<String>(), source.requested)
+        }
+    }
+
+    @Test
+    fun `a lookup that failed is retried later and one with no equivalent is not`() = runTest {
+        val repository = FakeAllergyRepository(
+            listOf(nsaids, Allergy(id = "f2", tipo = AllergyType.FAMILIA, atcCodigo = "Z99", atcNombre = "SIN EQUIVALENTE")),
+        )
+        val source = FakeAtcEnglishNameSource(
+            mapOf("M01A" to "ANTIINFLAMMATORY AND ANTIRHEUMATIC PRODUCTS, NON-STEROIDS"),
+            failures = mapOf("M01A" to 1),
+        )
+
+        withTranslator(repository, source) {
+            assertNull(repository.allergies.first { it.id == "f1" }.nombreIngles)
+
+            advanceTimeBy(AllergyTranslator.RETRY_DELAY_MS + 1)
+
+            assertEquals(
+                "ANTIINFLAMMATORY AND ANTIRHEUMATIC PRODUCTS, NON-STEROIDS",
+                repository.allergies.first { it.id == "f1" }.nombreIngles,
+            )
+            assertEquals(1, source.requested.count { it == "Z99" })
+        }
+    }
+
+    @Test
+    fun `retries stop after a few failures`() = runTest {
+        val repository = FakeAllergyRepository(listOf(nsaids))
+        val source = FakeAtcEnglishNameSource(emptyMap(), failures = mapOf("M01A" to 100))
+
+        withTranslator(repository, source) {
+            advanceTimeBy(AllergyTranslator.RETRY_DELAY_MS * 10)
+
+            assertEquals(AllergyTranslator.MAX_ATTEMPTS, source.requested.size)
+        }
+    }
+
+    @Test
+    fun `a name typed by hand while the lookup is running is kept`() = runTest {
+        val repository = FakeAllergyRepository(listOf(nsaids))
+        val source = FakeAtcEnglishNameSource(
+            mapOf("M01A" to "ANTIINFLAMMATORY AND ANTIRHEUMATIC PRODUCTS, NON-STEROIDS"),
+            duringLookup = { repository.setEnglishName("f1", "NSAIDs", manual = true) },
+        )
+
+        withTranslator(repository, source) {
+            val allergy = repository.allergies.single()
+            assertEquals("NSAIDs", allergy.nombreIngles)
+            assertTrue(allergy.nombreInglesManual)
         }
     }
 }

@@ -94,6 +94,17 @@ class FirestoreAllergyRepository(
         collection().document(allergyId).delete().await()
     }
 
+    /** En transacción: leer y escribir de golpe es lo que impide pisar un nombre recién escrito. */
+    override suspend fun setOfficialEnglishNameIfMissing(allergyId: String, nombreIngles: String) {
+        val document = collection().document(allergyId)
+        firestore.runTransaction { transaction ->
+            val snapshot = transaction.get(document)
+            if (snapshot.exists() && snapshot.getString(ENGLISH_NAME_FIELD) == null) {
+                transaction.update(document, ENGLISH_NAME_FIELD, nombreIngles)
+            }
+        }.await()
+    }
+
     override suspend fun setEnglishName(allergyId: String, nombreIngles: String?, manual: Boolean) {
         collection().document(allergyId).update(
             mapOf(
