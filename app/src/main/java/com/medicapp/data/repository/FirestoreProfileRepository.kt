@@ -25,13 +25,17 @@ class FirestoreProfileRepository(
         .document(authRepository.currentUserId ?: error("No hay sesión iniciada"))
 
     override fun observe(): Flow<PatientProfile?> = callbackFlow {
+        var hasEmitted = false
         val registration = userDocument().addSnapshotListener { snapshot, error ->
             if (error != null) {
-                // No se manda null: el informe lo tomaría por un perfil sin rellenar y volvería a
-                // pedir los datos. Se queda con lo último que llegó.
+                // Si ya llegó un perfil, se queda: un null lo haría pasar por uno sin rellenar. Si
+                // falla antes del primero, sí se manda null, porque Firestore no vuelve a llamar
+                // tras un error y el informe se quedaría esperando sin mostrar las alergias.
                 Log.w("ProfileRepository", "Profile listener failed", error)
+                if (!hasEmitted) trySend(null)
                 return@addSnapshotListener
             }
+            hasEmitted = true
             trySend(snapshot?.toPatientProfile())
         }
         awaitClose { registration.remove() }
