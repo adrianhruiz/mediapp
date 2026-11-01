@@ -52,6 +52,7 @@ import com.medicapp.ui.theme.DmMono
 @Composable
 fun AllergiesScreen(
     contentPadding: PaddingValues,
+    onOpenReport: () -> Unit,
     viewModel: AllergiesViewModel = viewModel(factory = AllergiesViewModel.Factory),
 ) {
     val allergies by viewModel.allergies.collectAsStateWithLifecycle()
@@ -67,7 +68,11 @@ fun AllergiesScreen(
             .padding(16.dp)
             .verticalScroll(rememberScrollState()),
     ) {
-        ScreenHeader(title = "Alergias", eyebrow = "Se avisa al buscar y al añadir")
+        ScreenHeader(
+            title = "Alergias",
+            eyebrow = "Se avisa al buscar y al añadir",
+            actions = { TextButton(onClick = onOpenReport) { Text("Informe") } },
+        )
         if (allergies.isEmpty()) {
             Text(
                 "Todavía no has marcado ninguna alergia",

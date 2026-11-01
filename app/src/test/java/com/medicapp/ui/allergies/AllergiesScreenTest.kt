@@ -32,7 +32,7 @@ class AllergiesScreenTest {
             MedicationCatalogRepository(FakeCimaApiService()),
         )
         composeRule.setContent {
-            AllergiesScreen(contentPadding = PaddingValues(), viewModel = viewModel)
+            AllergiesScreen(contentPadding = PaddingValues(), onOpenReport = {}, viewModel = viewModel)
         }
     }
 

@@ -40,7 +40,7 @@ class AllergiesScreenTest {
         )
         composeRule.setContent {
             MedicAppTheme {
-                AllergiesScreen(contentPadding = PaddingValues(), viewModel = viewModel)
+                AllergiesScreen(contentPadding = PaddingValues(), onOpenReport = {}, viewModel = viewModel)
             }
         }
     }
