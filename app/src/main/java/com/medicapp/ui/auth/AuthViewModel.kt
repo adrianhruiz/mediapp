@@ -18,6 +18,7 @@ data class AuthUiState(
     val password: String = "",
     val isLoading: Boolean = false,
     val errorMessage: String? = null,
+    val infoMessage: String? = null,
 )
 
 class AuthViewModel(
@@ -28,7 +29,7 @@ class AuthViewModel(
     val uiState: StateFlow<AuthUiState> = _uiState.asStateFlow()
 
     fun onEmailChanged(value: String) {
-        _uiState.update { it.copy(email = value, errorMessage = null) }
+        _uiState.update { it.copy(email = value, errorMessage = null, infoMessage = null) }
     }
 
     fun onPasswordChanged(value: String) {
@@ -67,6 +68,34 @@ class AuthViewModel(
                 onSuccess()
             } catch (e: Exception) {
                 _uiState.update { it.copy(errorMessage = "No se pudo crear la cuenta. ¿Quizá ya existe ese email?") }
+            } finally {
+                _uiState.update { it.copy(isLoading = false) }
+            }
+        }
+    }
+
+    /**
+     * Envía el enlace para elegir una contraseña nueva al email escrito. Firebase no dice si
+     * la cuenta existe, así que el aviso tampoco lo afirma.
+     */
+    fun sendPasswordReset() {
+        val email = _uiState.value.email.trim()
+        if (email.isEmpty()) {
+            _uiState.update { it.copy(errorMessage = "Escribe tu email para recuperar la contraseña.", infoMessage = null) }
+            return
+        }
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true, errorMessage = null, infoMessage = null) }
+            try {
+                authRepository.sendPasswordReset(email)
+                _uiState.update {
+                    it.copy(
+                        infoMessage = "Si hay una cuenta con ese email, te llegará un enlace para elegir " +
+                            "una contraseña nueva. Revisa también el correo no deseado.",
+                    )
+                }
+            } catch (e: Exception) {
+                _uiState.update { it.copy(errorMessage = "No se pudo enviar el email. Comprueba el email y la conexión.") }
             } finally {
                 _uiState.update { it.copy(isLoading = false) }
             }

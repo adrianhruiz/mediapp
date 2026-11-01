@@ -103,4 +103,60 @@ class AuthViewModelTest {
         assertTrue(succeeded)
         assertEquals(listOf("new@test.com" to "secret1"), repository.signUpCalls)
     }
+
+    @Test
+    fun `password reset asks for the email first`() = runTest(dispatcher) {
+        val repository = FakeAuthRepository()
+        val viewModel = AuthViewModel(repository)
+
+        viewModel.sendPasswordReset()
+        advanceUntilIdle()
+
+        assertEquals("Escribe tu email para recuperar la contraseña.", viewModel.uiState.value.errorMessage)
+        assertTrue(repository.passwordResetCalls.isEmpty())
+    }
+
+    @Test
+    fun `password reset sends the email to the trimmed address and says so`() = runTest(dispatcher) {
+        val repository = FakeAuthRepository()
+        val viewModel = AuthViewModel(repository)
+        viewModel.onEmailChanged("  user@test.com ")
+
+        viewModel.sendPasswordReset()
+        advanceUntilIdle()
+
+        assertEquals(listOf("user@test.com"), repository.passwordResetCalls)
+        assertEquals(
+            "Si hay una cuenta con ese email, te llegará un enlace para elegir una contraseña nueva. Revisa también el correo no deseado.",
+            viewModel.uiState.value.infoMessage,
+        )
+        assertNull(viewModel.uiState.value.errorMessage)
+        assertFalse(viewModel.uiState.value.isLoading)
+    }
+
+    @Test
+    fun `a failed password reset is reported`() = runTest(dispatcher) {
+        val repository = FakeAuthRepository().apply { shouldFailAuth = true }
+        val viewModel = AuthViewModel(repository)
+        viewModel.onEmailChanged("user@test.com")
+
+        viewModel.sendPasswordReset()
+        advanceUntilIdle()
+
+        assertEquals("No se pudo enviar el email. Comprueba el email y la conexión.", viewModel.uiState.value.errorMessage)
+        assertNull(viewModel.uiState.value.infoMessage)
+        assertFalse(viewModel.uiState.value.isLoading)
+    }
+
+    @Test
+    fun `editing the email clears the password reset notice`() = runTest(dispatcher) {
+        val viewModel = AuthViewModel(FakeAuthRepository())
+        viewModel.onEmailChanged("user@test.com")
+        viewModel.sendPasswordReset()
+        advanceUntilIdle()
+
+        viewModel.onEmailChanged("other@test.com")
+
+        assertNull(viewModel.uiState.value.infoMessage)
+    }
 }

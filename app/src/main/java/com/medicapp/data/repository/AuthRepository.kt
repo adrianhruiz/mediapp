@@ -12,5 +12,8 @@ interface AuthRepository {
 
     suspend fun signIn(email: String, password: String)
 
+    /** Envía el email de Firebase para elegir una contraseña nueva. */
+    suspend fun sendPasswordReset(email: String)
+
     fun signOut()
 }
