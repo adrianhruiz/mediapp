@@ -22,6 +22,8 @@ import com.medicapp.data.repository.ScheduleRepository
 import com.medicapp.data.remote.ChemblAtcEnglishNameSource
 import com.medicapp.domain.AllergyTranslator
 import com.medicapp.domain.DoseTaker
+import com.medicapp.notifications.DoseRescheduler
+import com.medicapp.notifications.SessionDoseRescheduler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -69,4 +71,10 @@ class AppContainer(context: Context) {
 
     val backupRepository: BackupRepository =
         FirestoreBackupRepository(FirebaseModule.firestore, authRepository)
+
+    init {
+        SessionDoseRescheduler.start(appScope, authRepository) {
+            DoseRescheduler.rescheduleFutureDoses(context, scheduleRepository)
+        }
+    }
 }
