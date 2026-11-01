@@ -7,7 +7,14 @@ import kotlinx.coroutines.flow.Flow
 
 interface AllergyRepository {
 
+    /** Si falla la lectura, emite una lista vacía: sirve donde una lista incompleta no engaña. */
     fun getAll(): Flow<List<Allergy>>
+
+    /**
+     * Como [getAll], pero un fallo de lectura llega como excepción. Es para el informe: ante un
+     * error tiene que mostrar el error, nunca "sin alergias".
+     */
+    fun getAllOrThrow(): Flow<List<Allergy>>
 
     suspend fun addPrincipioActivo(id: Int, nombre: String)
 

@@ -6,6 +6,7 @@ import com.medicapp.model.AtcCode
 import com.medicapp.model.PrincipioActivo
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.combine
 
 /**
  * Reparte las mismas ids deterministas que Firestore, para que aquí también sea imposible
@@ -23,7 +24,17 @@ class FakeAllergyRepository(
 
     val allergies: List<Allergy> get() = allergiesFlow.value
 
+    private val loadError = MutableStateFlow<Throwable?>(null)
+
     override fun getAll(): Flow<List<Allergy>> = allergiesFlow
+
+    override fun getAllOrThrow(): Flow<List<Allergy>> =
+        combine(allergiesFlow, loadError) { allergies, error -> if (error != null) throw error else allergies }
+
+    /** Simula que la escucha de Firestore falla: [getAllOrThrow] lanza el error. */
+    fun failLoading(error: Throwable) {
+        loadError.value = error
+    }
 
     override suspend fun addPrincipioActivo(id: Int, nombre: String) {
         addPrincipiosActivos(listOf(PrincipioActivo(id = id, nombre = nombre)))

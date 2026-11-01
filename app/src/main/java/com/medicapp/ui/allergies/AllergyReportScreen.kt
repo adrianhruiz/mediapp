@@ -97,6 +97,16 @@ fun AllergyReportScreen(
             return@Column
         }
 
+        if (uiState.allergiesLoadFailed) {
+            Text(
+                "No se han podido cargar las alergias. El informe no se muestra para no dar una lista incompleta.",
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.padding(top = 16.dp),
+            )
+            return@Column
+        }
+
         if (uiState.profileSaveFailed) {
             Text(
                 "No se han podido guardar los datos del paciente. Inténtalo de nuevo.",
