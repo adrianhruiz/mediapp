@@ -141,7 +141,8 @@ fun TodayScreen(
             item {
                 TodayHeader(
                     nowMillis = state.nowMillis,
-                    doseCount = plan.doses.size,
+                    doseCount = plan.todayCount,
+                    carriedOverCount = plan.carriedOverCount,
                     loading = state.loading,
                     onOpenReminders = onOpenReminders,
                     snackbarHostState = snackbarHostState,
@@ -207,6 +208,7 @@ fun TodayScreen(
 private fun TodayHeader(
     nowMillis: Long,
     doseCount: Int,
+    carriedOverCount: Int,
     loading: Boolean,
     onOpenReminders: () -> Unit,
     snackbarHostState: SnackbarHostState,
@@ -224,6 +226,13 @@ private fun TodayHeader(
                 },
                 style = MaterialTheme.typography.headlineMedium,
             )
+            if (!loading && carriedOverCount > 0) {
+                Text(
+                    text = if (carriedOverCount == 1) "1 toma sin marcar de días anteriores" else "$carriedOverCount tomas sin marcar de días anteriores",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
         }
         IconButton(onClick = onOpenReminders) {
             Icon(Icons.Default.EventNote, contentDescription = "Pautas y recordatorios")

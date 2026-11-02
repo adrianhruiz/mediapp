@@ -117,6 +117,8 @@ class TodayViewModelTest {
         assertTrue(plan.doses.first().overdue)
         assertFalse(plan.doses[1].overdue)
         assertEquals(today - day + 9 * hour, plan.next?.dose?.scheduledAtMillis)
+        assertEquals(1, plan.todayCount)
+        assertEquals(1, plan.carriedOverCount)
     }
 
     @Test

@@ -10,6 +10,8 @@ data class TodayDose(
     val schedule: MedicationSchedule,
     val dose: MedicationDose,
     val overdue: Boolean,
+    /** Es de un día anterior y sigue sin marcar: no cuenta entre las tomas de hoy. */
+    val carriedOver: Boolean = false,
 ) {
     val pending: Boolean get() = dose.status == DoseStatus.PENDING
 }
@@ -19,6 +21,8 @@ data class TodayPlan(
     val doses: List<TodayDose> = emptyList(),
     val next: TodayDose? = null,
 ) {
+    val todayCount: Int get() = doses.count { !it.carriedOver }
+    val carriedOverCount: Int get() = doses.count { it.carriedOver }
     val allDone: Boolean get() = doses.isNotEmpty() && next == null
 }
 
@@ -29,6 +33,7 @@ object TodayPlanner {
      * así que la que toca ahora ([TodayPlan.next]) es la más antigua sin tomar.
      */
     fun plan(doses: List<ScheduledDose>, nowMillis: Long, missed: List<ScheduledDose> = emptyList()): TodayPlan {
+        val missedIds = missed.map { it.dose.id }.toSet()
         val today = (missed + doses)
             .sortedBy { it.dose.scheduledAtMillis }
             .map { (schedule, dose) ->
@@ -36,6 +41,7 @@ object TodayPlanner {
                     schedule = schedule,
                     dose = dose,
                     overdue = dose.status == DoseStatus.PENDING && dose.scheduledAtMillis < nowMillis,
+                    carriedOver = dose.id in missedIds,
                 )
             }
         return TodayPlan(doses = today, next = today.firstOrNull { it.pending })
