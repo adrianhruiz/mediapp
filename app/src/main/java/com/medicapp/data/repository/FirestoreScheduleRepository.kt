@@ -68,6 +68,60 @@ class FirestoreScheduleRepository(
                 }
             }
 
+    /**
+     * Pautas activas (las cerradas pasan todas sus tomas pendientes a saltadas) y, de cada una,
+     * sus tomas pendientes. Filtrar además por hora en la consulta exigiría un índice compuesto
+     * (igualdad en el estado y rango en la hora); las pendientes de una pauta son pocas y las
+     * futuras se descartan aquí.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    override fun observeMissedDoses(beforeMillis: Long): Flow<List<ScheduledDose>> = callbackFlow {
+        val registration = schedulesCollection()
+            .whereEqualTo("status", ScheduleStatus.ACTIVE.name)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    Log.w("ScheduleRepository", "Active schedules listener failed", error)
+                    trySend(emptyList<MedicationSchedule>())
+                    return@addSnapshotListener
+                }
+                trySend(snapshot?.documents.orEmpty().mapNotNull { it.toMedicationSchedule() })
+            }
+        awaitClose { registration.remove() }
+    }
+        .map { schedules -> schedules.filter { it.startAtMillis < beforeMillis } }
+        .distinctUntilChanged()
+        .flatMapLatest { schedules ->
+            if (schedules.isEmpty()) {
+                flowOf(emptyList())
+            } else {
+                combine(schedules.map { observePendingBefore(it, beforeMillis) }) { parts ->
+                    parts.flatMap { it }.sortedBy { it.dose.scheduledAtMillis }
+                }
+            }
+        }
+
+    private fun observePendingBefore(
+        schedule: MedicationSchedule,
+        beforeMillis: Long,
+    ): Flow<List<ScheduledDose>> = callbackFlow {
+        val registration = dosesCollection(schedule.id)
+            .whereEqualTo("status", DoseStatus.PENDING.name)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    Log.w("ScheduleRepository", "Pending doses listener failed", error)
+                    trySend(emptyList())
+                    return@addSnapshotListener
+                }
+                trySend(
+                    snapshot?.documents.orEmpty()
+                        .mapNotNull { it.toMedicationDose(schedule.id) }
+                        .filter { it.scheduledAtMillis < beforeMillis }
+                        .map { ScheduledDose(schedule, it) },
+                )
+            }
+        awaitClose { registration.remove() }
+    }
+
     private fun observeSchedulesEndingFrom(fromMillis: Long): Flow<List<MedicationSchedule>> = callbackFlow {
         val registration = schedulesCollection()
             .whereGreaterThanOrEqualTo(END_AT_FIELD, fromMillis)

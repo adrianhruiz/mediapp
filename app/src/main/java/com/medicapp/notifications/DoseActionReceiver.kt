@@ -4,7 +4,6 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.util.Log
-import androidx.core.app.NotificationManagerCompat
 import com.medicapp.MedicApp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -21,7 +20,7 @@ class DoseActionReceiver : BroadcastReceiver() {
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 markDoseTaken(app, scheduleId, doseId)
-                NotificationManagerCompat.from(context).cancel(doseId.hashCode())
+                DoseAlarmScheduler.cancelDose(context.applicationContext, scheduleId, doseId)
             } catch (e: Exception) {
                 Log.w("DoseActionReceiver", "Failed to mark dose as taken", e)
             } finally {

@@ -8,9 +8,57 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import com.medicapp.MainActivity
+import com.medicapp.MedicApp
+import com.medicapp.model.DoseStatus
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
+/**
+ * Salta a la hora de cada toma y avisa. Un rato después ([DoseAlarmScheduler.MISSED_REMINDER_DELAY_MILLIS])
+ * vuelve a saltar como recordatorio, y solo avisa si la toma sigue sin marcar.
+ */
 class DoseAlarmReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
+        val reminder = intent.getBooleanExtra(DoseAlarmScheduler.EXTRA_IS_REMINDER, false)
+        if (!reminder) {
+            showNotification(context, intent, reminder = false)
+            scheduleMissedReminder(context, intent)
+            return
+        }
+        val scheduleId = intent.getStringExtra(DoseAlarmScheduler.EXTRA_SCHEDULE_ID) ?: return
+        val doseId = intent.getStringExtra(DoseAlarmScheduler.EXTRA_DOSE_ID) ?: return
+        val pendingResult = goAsync()
+        val app = context.applicationContext as MedicApp
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                // Un solo documento: si ya se marcó (o la pauta se cerró) no hay nada que recordar.
+                val stillPending = app.container.authRepository.currentUserId != null &&
+                    app.container.scheduleRepository.getDose(scheduleId, doseId)?.status == DoseStatus.PENDING
+                if (stillPending) showNotification(context, intent, reminder = true)
+            } catch (e: Exception) {
+                Log.w("DoseAlarmReceiver", "Failed to check missed dose", e)
+            } finally {
+                pendingResult.finish()
+            }
+        }
+    }
+
+    private fun scheduleMissedReminder(context: Context, intent: Intent) {
+        val scheduleId = intent.getStringExtra(DoseAlarmScheduler.EXTRA_SCHEDULE_ID) ?: return
+        val doseId = intent.getStringExtra(DoseAlarmScheduler.EXTRA_DOSE_ID) ?: return
+        DoseAlarmScheduler.scheduleMissedReminder(
+            context,
+            scheduleId,
+            doseId,
+            intent.getStringExtra(DoseAlarmScheduler.EXTRA_NOMBRE_MEDICAMENTO).orEmpty(),
+            intent.getIntExtra(DoseAlarmScheduler.EXTRA_DOSE_NUMBER, 1),
+            intent.getIntExtra(DoseAlarmScheduler.EXTRA_TOTAL_DOSES, 1),
+            System.currentTimeMillis() + DoseAlarmScheduler.MISSED_REMINDER_DELAY_MILLIS,
+        )
+    }
+
+    private fun showNotification(context: Context, intent: Intent, reminder: Boolean) {
         val scheduleId = intent.getStringExtra(DoseAlarmScheduler.EXTRA_SCHEDULE_ID) ?: return
         val doseId = intent.getStringExtra(DoseAlarmScheduler.EXTRA_DOSE_ID) ?: return
         val nombreMedicamento = intent.getStringExtra(DoseAlarmScheduler.EXTRA_NOMBRE_MEDICAMENTO).orEmpty()
@@ -23,7 +71,7 @@ class DoseAlarmReceiver : BroadcastReceiver() {
         }
         val contentPendingIntent = PendingIntent.getActivity(
             context,
-            doseId.hashCode(),
+            DoseAlarmScheduler.notificationId(doseId, reminder),
             contentIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
@@ -35,15 +83,17 @@ class DoseAlarmReceiver : BroadcastReceiver() {
         }
         val actionPendingIntent = PendingIntent.getBroadcast(
             context,
-            doseId.hashCode(),
+            DoseAlarmScheduler.notificationId(doseId, reminder),
             actionIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
         val notification = NotificationCompat.Builder(context, NotificationChannels.DOSE_REMINDERS_CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_popup_reminder)
-            .setContentTitle("Hora de tomar $nombreMedicamento")
-            .setContentText("Toma $doseNumber de $totalDoses")
+            .setContentTitle(if (reminder) "Sin tomar: $nombreMedicamento" else "Hora de tomar $nombreMedicamento")
+            .setContentText(
+                if (reminder) "Toma $doseNumber de $totalDoses · aún no la has marcada" else "Toma $doseNumber de $totalDoses",
+            )
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
             .setContentIntent(contentPendingIntent)
@@ -51,7 +101,7 @@ class DoseAlarmReceiver : BroadcastReceiver() {
             .build()
 
         try {
-            NotificationManagerCompat.from(context).notify(doseId.hashCode(), notification)
+            NotificationManagerCompat.from(context).notify(DoseAlarmScheduler.notificationId(doseId, reminder), notification)
         } catch (e: SecurityException) {
             Log.w("DoseAlarmReceiver", "Missing POST_NOTIFICATIONS permission", e)
         }

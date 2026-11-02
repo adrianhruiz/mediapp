@@ -66,6 +66,20 @@ private val dayFormat = DateTimeFormatter.ofPattern("EEEE · d MMM", spanish)
 
 private fun Long.hour(): String = hourFormat.format(Instant.ofEpochMilli(this).atZone(ZoneId.systemDefault()))
 
+private val shortDayFormat = DateTimeFormatter.ofPattern("d MMM", spanish)
+
+/** "ayer", "el 20 oct"... para una toma de otro día; null si es de hoy. */
+private fun Long.earlierDayText(nowMillis: Long): String? {
+    val zone = ZoneId.systemDefault()
+    val day = Instant.ofEpochMilli(this).atZone(zone).toLocalDate()
+    val today = Instant.ofEpochMilli(nowMillis).atZone(zone).toLocalDate()
+    return when {
+        !day.isBefore(today) -> null
+        day == today.minusDays(1) -> "ayer"
+        else -> "el " + shortDayFormat.format(day).replace(".", "")
+    }
+}
+
 private fun dayLabel(nowMillis: Long): String =
     dayFormat.format(Instant.ofEpochMilli(nowMillis).atZone(ZoneId.systemDefault())).replace(".", "").uppercase(spanish)
 
@@ -91,7 +105,9 @@ private fun TodayDose.whenText(nowMillis: Long): String {
         DoseStatus.PENDING -> {
             val minutes = (at - nowMillis) / 60_000
             when {
-                overdue -> "Te toca desde las ${at.hour()}"
+                overdue -> at.earlierDayText(nowMillis)
+                    ?.let { "Sin tomar desde $it a las ${at.hour()}" }
+                    ?: "Te toca desde las ${at.hour()}"
                 minutes < 1 -> "Te toca ahora"
                 minutes < 60 -> "Toca en $minutes min"
                 else -> "Toca a las ${at.hour()}"
@@ -125,7 +141,8 @@ fun TodayScreen(
             item {
                 TodayHeader(
                     nowMillis = state.nowMillis,
-                    doseCount = plan.doses.size,
+                    doseCount = plan.todayCount,
+                    carriedOverCount = plan.carriedOverCount,
                     loading = state.loading,
                     onOpenReminders = onOpenReminders,
                     snackbarHostState = snackbarHostState,
@@ -176,9 +193,9 @@ fun TodayScreen(
                             )
                         }
                     }
-                    item { Eyebrow("Todas las tomas de hoy") }
+                    item { Eyebrow(if (plan.doses.any { it.overdue }) "Tomas de hoy y sin tomar" else "Todas las tomas de hoy") }
                     items(plan.doses, key = { it.dose.id }) { dose ->
-                        DoseRow(dose = dose, selected = dose == selected, onClick = { selectedId = dose.dose.id })
+                        DoseRow(dose = dose, nowMillis = state.nowMillis, selected = dose == selected, onClick = { selectedId = dose.dose.id })
                     }
                 }
             }
@@ -191,6 +208,7 @@ fun TodayScreen(
 private fun TodayHeader(
     nowMillis: Long,
     doseCount: Int,
+    carriedOverCount: Int,
     loading: Boolean,
     onOpenReminders: () -> Unit,
     snackbarHostState: SnackbarHostState,
@@ -208,6 +226,13 @@ private fun TodayHeader(
                 },
                 style = MaterialTheme.typography.headlineMedium,
             )
+            if (!loading && carriedOverCount > 0) {
+                Text(
+                    text = if (carriedOverCount == 1) "1 toma sin marcar de días anteriores" else "$carriedOverCount tomas sin marcar de días anteriores",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
         }
         IconButton(onClick = onOpenReminders) {
             Icon(Icons.Default.EventNote, contentDescription = "Pautas y recordatorios")
@@ -283,7 +308,7 @@ private fun DoseCard(dose: TodayDose, nowMillis: Long, onMarkTaken: () -> Unit) 
 }
 
 @Composable
-private fun DoseRow(dose: TodayDose, selected: Boolean, onClick: () -> Unit) {
+private fun DoseRow(dose: TodayDose, nowMillis: Long, selected: Boolean, onClick: () -> Unit) {
     val (name, _) = MedicationNames.split(dose.schedule.nombreMedicamento)
     Row(
         modifier = Modifier
@@ -294,10 +319,11 @@ private fun DoseRow(dose: TodayDose, selected: Boolean, onClick: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
+        val at = dose.dose.scheduledAtMillis
         Text(
-            dose.dose.scheduledAtMillis.hour(),
+            at.earlierDayText(nowMillis)?.let { "${it.removePrefix("el ")} ${at.hour()}" } ?: at.hour(),
             style = MaterialTheme.typography.bodyMedium.copy(fontFamily = DmMono),
-            modifier = Modifier.width(48.dp),
+            modifier = Modifier.width(88.dp),
         )
         Text(
             name,
