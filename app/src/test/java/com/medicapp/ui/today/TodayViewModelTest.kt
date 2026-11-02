@@ -49,7 +49,8 @@ class TodayViewModelTest {
     @Test
     fun `shows only today's doses, in order, with the earliest pending one as next`() = runTest(dispatcher) {
         schedule("1", startAt = today + 8 * hour, intervalHours = 6, total = 3)
-        schedule("2", startAt = today - day + 9 * hour, intervalHours = 24, total = 1)
+        val (yesterdaySchedule, yesterdayDoses) = schedule("2", startAt = today - day + 9 * hour, intervalHours = 24, total = 1)
+        doseTaker.markTaken(yesterdaySchedule, yesterdayDoses.single())
         val clock = MutableStateFlow(today + 10 * hour)
         val viewModel = TodayViewModel(schedules, doseTaker, ZoneOffset.UTC, clock)
         backgroundScope.launch { viewModel.uiState.collect {} }
@@ -78,12 +79,13 @@ class TodayViewModelTest {
 
     @Test
     fun `a new day loads that day's doses`() = runTest(dispatcher) {
-        schedule("1", startAt = today + 8 * hour, intervalHours = 24, total = 2)
+        val (created, doses) = schedule("1", startAt = today + 8 * hour, intervalHours = 24, total = 2)
         val clock = MutableStateFlow(today + 10 * hour)
         val viewModel = TodayViewModel(schedules, doseTaker, ZoneOffset.UTC, clock)
         backgroundScope.launch { viewModel.uiState.collect {} }
         advanceUntilIdle()
 
+        doseTaker.markTaken(created, doses.first())
         clock.value = today + day + 1 * hour
         advanceUntilIdle()
 
@@ -100,5 +102,47 @@ class TodayViewModelTest {
         advanceUntilIdle()
 
         assertTrue(viewModel.uiState.value.plan.allDone)
+    }
+
+    @Test
+    fun `an untaken dose from yesterday shows first as overdue and is the next one`() = runTest(dispatcher) {
+        schedule("1", startAt = today - day + 9 * hour, intervalHours = 24, total = 2)
+        val viewModel = TodayViewModel(schedules, doseTaker, ZoneOffset.UTC, MutableStateFlow(today + 7 * hour))
+        backgroundScope.launch { viewModel.uiState.collect {} }
+
+        advanceUntilIdle()
+
+        val plan = viewModel.uiState.value.plan
+        assertEquals(listOf(-15L, 9L), plan.doses.map { (it.dose.scheduledAtMillis - today) / hour })
+        assertTrue(plan.doses.first().overdue)
+        assertFalse(plan.doses[1].overdue)
+        assertEquals(today - day + 9 * hour, plan.next?.dose?.scheduledAtMillis)
+    }
+
+    @Test
+    fun `taking the missed dose removes it from today`() = runTest(dispatcher) {
+        val (created, doses) = schedule("1", startAt = today - day + 9 * hour, intervalHours = 24, total = 2)
+        val viewModel = TodayViewModel(schedules, doseTaker, ZoneOffset.UTC, MutableStateFlow(today + 7 * hour))
+        backgroundScope.launch { viewModel.uiState.collect {} }
+        advanceUntilIdle()
+
+        doseTaker.markTaken(created, doses.first())
+        advanceUntilIdle()
+
+        assertEquals(listOf(9L), viewModel.uiState.value.plan.doses.map { (it.dose.scheduledAtMillis - today) / hour })
+    }
+
+    @Test
+    fun `doses skipped by closing a schedule are not shown as missed`() = runTest(dispatcher) {
+        val (created, _) = schedule("1", startAt = today - day + 9 * hour, intervalHours = 24, total = 2)
+        schedules.closeSchedule(created.id)
+        val viewModel = TodayViewModel(schedules, doseTaker, ZoneOffset.UTC, MutableStateFlow(today + 7 * hour))
+        backgroundScope.launch { viewModel.uiState.collect {} }
+
+        advanceUntilIdle()
+
+        val plan = viewModel.uiState.value.plan
+        assertEquals(listOf(9L), plan.doses.map { (it.dose.scheduledAtMillis - today) / hour })
+        assertTrue(plan.doses.none { it.overdue })
     }
 }

@@ -53,9 +53,15 @@ class TodayViewModel(
     val uiState: StateFlow<TodayUiState> = ticks
         .map { now -> dayRange(now, zone) }
         .distinctUntilChanged()
-        .flatMapLatest { (from, to) -> scheduleRepository.observeDosesBetween(from, to) }
-        .combine(ticks) { doses, now ->
-            TodayUiState(loading = false, nowMillis = now, plan = TodayPlanner.plan(doses, now))
+        .flatMapLatest { (from, to) ->
+            // Las atrasadas son las pendientes anteriores a hoy: se vigilan junto a las de hoy.
+            combine(
+                scheduleRepository.observeDosesBetween(from, to),
+                scheduleRepository.observeMissedDoses(from),
+            ) { doses, missed -> doses to missed }
+        }
+        .combine(ticks) { (doses, missed), now ->
+            TodayUiState(loading = false, nowMillis = now, plan = TodayPlanner.plan(doses, now, missed))
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), TodayUiState())
 

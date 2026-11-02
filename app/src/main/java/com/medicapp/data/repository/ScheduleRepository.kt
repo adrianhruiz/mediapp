@@ -25,6 +25,13 @@ interface ScheduleRepository {
      */
     fun observeDosesBetween(fromMillis: Long, toMillis: Long): Flow<List<ScheduledDose>>
 
+    /**
+     * Tomas sin marcar cuya hora es anterior a [beforeMillis], en pautas activas, de la más
+     * antigua a la más reciente y en tiempo real. Es lo que Hoy enseña como atrasado cuando una
+     * toma de un día anterior se quedó sin tomar.
+     */
+    fun observeMissedDoses(beforeMillis: Long): Flow<List<ScheduledDose>>
+
     fun getSchedulesPage(limit: Long): Flow<PagedResult<MedicationSchedule>>
 
     /** Números de registro con pauta activa, para marcarlos como guardados en la búsqueda. */

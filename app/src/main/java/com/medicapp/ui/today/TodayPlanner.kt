@@ -24,8 +24,12 @@ data class TodayPlan(
 
 object TodayPlanner {
 
-    fun plan(doses: List<ScheduledDose>, nowMillis: Long): TodayPlan {
-        val today = doses
+    /**
+     * [missed] son las tomas sin marcar de días anteriores: van primero y siempre como atrasadas,
+     * así que la que toca ahora ([TodayPlan.next]) es la más antigua sin tomar.
+     */
+    fun plan(doses: List<ScheduledDose>, nowMillis: Long, missed: List<ScheduledDose> = emptyList()): TodayPlan {
+        val today = (missed + doses)
             .sortedBy { it.dose.scheduledAtMillis }
             .map { (schedule, dose) ->
                 TodayDose(

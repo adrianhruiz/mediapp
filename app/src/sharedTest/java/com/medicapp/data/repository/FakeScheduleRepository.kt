@@ -56,6 +56,24 @@ class FakeScheduleRepository : ScheduleRepository {
             }
         }
 
+    @OptIn(ExperimentalCoroutinesApi::class)
+    override fun observeMissedDoses(beforeMillis: Long): Flow<List<ScheduledDose>> =
+        schedulesFlow.flatMapLatest { schedules ->
+            val active = schedules.filter { it.status == ScheduleStatus.ACTIVE }
+            if (active.isEmpty()) {
+                flowOf(emptyList())
+            } else {
+                combine(
+                    active.map { schedule ->
+                        dosesFlow(schedule.id).map { doses ->
+                            doses.filter { it.status == DoseStatus.PENDING && it.scheduledAtMillis < beforeMillis }
+                                .map { ScheduledDose(schedule, it) }
+                        }
+                    },
+                ) { parts -> parts.flatMap { it }.sortedBy { it.dose.scheduledAtMillis } }
+            }
+        }
+
     override fun getSchedulesPage(limit: Long): Flow<PagedResult<MedicationSchedule>> = schedulesFlow.map { schedules ->
         val loaded = schedules.take(limit.toInt() + 1)
         PagedResult(
