@@ -165,4 +165,44 @@ class DoseTakerTest {
         assertEquals(listOf(DoseStatus.TAKEN, DoseStatus.SKIPPED), schedules.dosesSnapshot(schedule.id).map { it.status })
         assertEquals(ScheduleStatus.CLOSED, schedules.getSchedule(schedule.id)!!.status)
     }
+
+    @Test
+    fun `taking a dose after a long gap creates the missed doses as pending and alarms only future ones`() = runTest {
+        val alarmed = mutableListOf<MedicationDose>()
+        val later = now + 20 * day + hour
+        val taker = DoseTaker(schedules, history, now = { later }) { _, doses -> alarmed += doses }
+        val (schedule, doses) = schedules.createSchedule(
+            nregistro = "1", nombreMedicamento = "Vitamina D", fotoUrl = null, intervalHours = 24,
+            totalDoses = 0, startAtMillis = now, reasonId = "r1", reasonNombre = "Déficit",
+            openEnded = true, nowMillis = now,
+        )
+
+        taker.markTaken(schedule, doses.first())
+
+        val after = schedules.dosesSnapshot(schedule.id)
+        // Sin huecos: una toma cada día desde now hasta la ventana de later (now + 27 d).
+        assertEquals((0..27).map { now + it * day }, after.map { it.scheduledAtMillis })
+        assertEquals((1..28).toList(), after.map { it.doseNumber })
+        val missed = after.filter { it.scheduledAtMillis in (now + 7 * day)..later }
+        assertEquals(14, missed.size)
+        assertTrue(missed.all { it.status == DoseStatus.PENDING })
+        assertEquals((21..27).map { now + it * day }, alarmed.map { it.scheduledAtMillis })
+    }
+
+    @Test
+    fun `a refill larger than one write batch is split without losing or repeating doses`() = runTest {
+        val chunked = FakeScheduleRepository(maxDosesPerRefill = 5)
+        val (schedule, _) = chunked.createSchedule(
+            nregistro = "1", nombreMedicamento = "Vitamina D", fotoUrl = null, intervalHours = 24,
+            totalDoses = 0, startAtMillis = now, reasonId = "r1", reasonNombre = "Déficit",
+            openEnded = true, nowMillis = now,
+        )
+
+        val added = chunked.replenishOpenEndedDoses(schedule.id, now + 20 * day + hour)
+
+        assertEquals(21, added.size)
+        val all = chunked.dosesSnapshot(schedule.id)
+        assertEquals((0..27).map { now + it * day }, all.map { it.scheduledAtMillis })
+        assertEquals((1..28).toList(), all.map { it.doseNumber })
+    }
 }

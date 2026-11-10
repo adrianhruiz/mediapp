@@ -538,6 +538,18 @@ class FirestoreScheduleRepository(
      * la frecuencia vieja. Si la pauta ya se cerró, no crea nada.
      */
     override suspend fun replenishOpenEndedDoses(scheduleId: String, nowMillis: Long): List<MedicationDose> {
+        val added = mutableListOf<MedicationDose>()
+        // Un hueco largo puede pasar del límite de escrituras de una transacción: se repone por
+        // tramos, y cada uno vuelve a leer dónde se quedó el anterior.
+        while (true) {
+            val chunk = replenishChunk(scheduleId, nowMillis)
+            added += chunk
+            if (chunk.size < DoseScheduleCalculator.MAX_DOSES_PER_REFILL) return added
+        }
+    }
+
+    /** Un tramo de la reposición, de [DoseScheduleCalculator.MAX_DOSES_PER_REFILL] tomas como mucho. */
+    private suspend fun replenishChunk(scheduleId: String, nowMillis: Long): List<MedicationDose> {
         val scheduleRef = schedulesCollection().document(scheduleId)
         return firestore.runTransaction { transaction ->
             val snapshot = transaction.get(scheduleRef)
@@ -547,7 +559,7 @@ class FirestoreScheduleRepository(
             }
             val lastAt = snapshot.getLong(END_AT_FIELD) ?: return@runTransaction emptyList<MedicationDose>()
             val lastNumber = (snapshot.getLong(LAST_DOSE_NUMBER_FIELD) ?: return@runTransaction emptyList<MedicationDose>()).toInt()
-            val times = DoseScheduleCalculator.openEndedReplenish(lastAt, schedule.intervalHours, nowMillis)
+            val times = DoseScheduleCalculator.openEndedReplenishChunk(lastAt, schedule.intervalHours, nowMillis)
             if (times.isEmpty()) return@runTransaction emptyList<MedicationDose>()
 
             val added = times.mapIndexed { index, scheduledAtMillis ->

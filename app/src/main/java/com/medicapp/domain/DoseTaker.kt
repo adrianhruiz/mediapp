@@ -56,6 +56,9 @@ class DoseTaker(
             Log.w("DoseTaker", "Could not replenish open-ended schedule", e)
             return
         }
-        if (added.isNotEmpty()) scheduleAlarms(schedule, added)
+        // Las de un hueco ya pasado se crean para que salgan como atrasadas, pero sin alarma.
+        val currentTime = now()
+        val future = added.filter { it.scheduledAtMillis > currentTime }
+        if (future.isNotEmpty()) scheduleAlarms(schedule, future)
     }
 }

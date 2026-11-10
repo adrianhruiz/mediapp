@@ -94,7 +94,8 @@ interface ScheduleRepository {
 
     /**
      * Crea las tomas que le faltan a una pauta sin fin activa para cubrir los próximos días
-     * (ver `DoseScheduleCalculator.openEndedReplenish`) y las devuelve para ponerles alarma.
+     * (ver `DoseScheduleCalculator.openEndedReplenish`) y las devuelve para ponerles alarma a
+     * las que aún no han pasado. Tras un hueco largo incluye las perdidas, que salen atrasadas.
      * Lista vacía si la pauta no es sin fin, no está activa o no le falta ninguna.
      */
     suspend fun replenishOpenEndedDoses(scheduleId: String, nowMillis: Long): List<MedicationDose>
