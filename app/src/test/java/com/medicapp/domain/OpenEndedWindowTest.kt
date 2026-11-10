@@ -59,11 +59,31 @@ class OpenEndedWindowTest {
     }
 
     @Test
-    fun `replenishing after a long gap skips the slots that already passed and keeps the rhythm`() {
+    fun `replenishing after a long gap also creates the missed slots at their own time`() {
         val last = now - 10 * day + hour
 
         val times = DoseScheduleCalculator.openEndedReplenish(last, intervalHours = 24, nowMillis = now)
 
-        assertEquals((0 until 7).map { now + hour + it * day }, times)
+        // Las 9 que se perdieron (de now - 9 d + 1 h a now - 1 d + 1 h) y las 7 de la ventana.
+        assertEquals((-8..7).map { now - day + hour + it * day }, times)
+    }
+
+    @Test
+    fun `a chunked refill creates the same doses as a single one`() {
+        val last = now - 30 * day
+        val all = DoseScheduleCalculator.openEndedReplenish(last, intervalHours = 1, nowMillis = now)
+        assertEquals(true, all.size > 2 * DoseScheduleCalculator.MAX_DOSES_PER_REFILL)
+
+        val chunks = mutableListOf<List<Long>>()
+        var lastAt = last
+        while (true) {
+            val chunk = DoseScheduleCalculator.openEndedReplenishChunk(lastAt, intervalHours = 1, nowMillis = now)
+            if (chunk.isEmpty()) break
+            chunks += chunk
+            lastAt = chunk.last()
+        }
+
+        assertEquals(all, chunks.flatten())
+        assertEquals(true, chunks.all { it.size <= DoseScheduleCalculator.MAX_DOSES_PER_REFILL })
     }
 }

@@ -42,17 +42,38 @@ object DoseScheduleCalculator {
      * Tomas que faltan tras [lastAtMillis] (la última creada) para volver a cubrir los próximos
      * siete días, con al menos una por delante de [nowMillis].
      *
-     * Si la app pasó más de la ventana sin abrirse, los huecos que ya pasaron no se inventan:
-     * nunca tuvieron alarma ni se vieron en Hoy, y crearlos de golpe llenaría las atrasadas de
-     * tomas de las que nadie avisó. Se sigue al mismo ritmo desde el primer hueco por delante.
+     * Si pasaron más de siete días sin reponer, también se crean las de los huecos, cada una a
+     * su hora: salen como atrasadas, igual que una toma que se pasó sin marcar, en vez de
+     * desaparecer sin rastro. Quien las recibe solo les pone alarma a las que aún no han pasado.
      */
     fun openEndedReplenish(lastAtMillis: Long, intervalHours: Int, nowMillis: Long): List<Long> {
         val step = intervalHours * 3_600_000L
-        var next = lastAtMillis + step
-        if (next <= nowMillis) next += ((nowMillis - next) / step + 1) * step
         val horizon = nowMillis + OPEN_ENDED_WINDOW_MILLIS
-        val times = generateSequence(next) { it + step }.takeWhile { it < horizon }.toList()
-        // Sin ninguna por delante, la siguiente se crea aunque caiga fuera de la ventana.
-        return if (times.isEmpty() && lastAtMillis <= nowMillis) listOf(next) else times
+        val times = mutableListOf<Long>()
+        var next = lastAtMillis + step
+        // Hasta cubrir la ventana y, aunque caiga fuera, hasta tener una por delante.
+        while (next < horizon || (times.lastOrNull() ?: lastAtMillis) <= nowMillis) {
+            times += next
+            next += step
+        }
+        return times
     }
+
+    /**
+     * Cuántas tomas se crean como mucho de una vez. Firestore admite 500 escrituras por
+     * transacción y cada reposición escribe además la pauta; un hueco largo con una frecuencia
+     * corta (semanas sin abrir la app, cada pocas horas) se reparte en varias.
+     */
+    const val MAX_DOSES_PER_REFILL = 400
+
+    /**
+     * El primer tramo de [openEndedReplenish], de [maxDoses] tomas como mucho. Repetirlo desde la
+     * última toma de cada tramo hasta que salga vacío crea exactamente las mismas tomas.
+     */
+    fun openEndedReplenishChunk(
+        lastAtMillis: Long,
+        intervalHours: Int,
+        nowMillis: Long,
+        maxDoses: Int = MAX_DOSES_PER_REFILL,
+    ): List<Long> = openEndedReplenish(lastAtMillis, intervalHours, nowMillis).take(maxDoses)
 }

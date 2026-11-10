@@ -14,7 +14,13 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 
-class FakeScheduleRepository : ScheduleRepository {
+/**
+ * [maxDosesPerRefill] imita el reparto de una reposición larga en tramos, como hace Firestore por
+ * su límite de escrituras por transacción.
+ */
+class FakeScheduleRepository(
+    private val maxDosesPerRefill: Int = DoseScheduleCalculator.MAX_DOSES_PER_REFILL,
+) : ScheduleRepository {
 
     private val schedulesFlow = MutableStateFlow<List<MedicationSchedule>>(emptyList())
     private val dosesByScheduleFlow = mutableMapOf<String, MutableStateFlow<List<MedicationDose>>>()
@@ -207,14 +213,19 @@ class FakeScheduleRepository : ScheduleRepository {
     override suspend fun replenishOpenEndedDoses(scheduleId: String, nowMillis: Long): List<MedicationDose> {
         val schedule = getSchedule(scheduleId)
             ?.takeIf { it.openEnded && it.status == ScheduleStatus.ACTIVE } ?: return emptyList()
-        val doses = dosesFlow(scheduleId).value
-        val last = doses.maxByOrNull { it.scheduledAtMillis } ?: return emptyList()
-        var number = doses.maxOf { it.doseNumber }
-        val added = DoseScheduleCalculator.openEndedReplenish(last.scheduledAtMillis, schedule.intervalHours, nowMillis)
-            .map { newDose(scheduleId, ++number, it) }
-        if (added.isEmpty()) return emptyList()
-        editedEndAt[scheduleId] = added.last().scheduledAtMillis
-        dosesFlow(scheduleId).value = doses + added
+        val added = mutableListOf<MedicationDose>()
+        while (true) {
+            val doses = dosesFlow(scheduleId).value
+            val last = doses.maxByOrNull { it.scheduledAtMillis } ?: break
+            var number = doses.maxOf { it.doseNumber }
+            val chunk = DoseScheduleCalculator.openEndedReplenishChunk(
+                last.scheduledAtMillis, schedule.intervalHours, nowMillis, maxDosesPerRefill,
+            ).map { newDose(scheduleId, ++number, it) }
+            if (chunk.isEmpty()) break
+            editedEndAt[scheduleId] = chunk.last().scheduledAtMillis
+            dosesFlow(scheduleId).value = doses + chunk
+            added += chunk
+        }
         return added
     }
 

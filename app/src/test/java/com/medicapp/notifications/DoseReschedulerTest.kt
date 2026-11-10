@@ -53,6 +53,19 @@ class DoseReschedulerTest {
     }
 
     @Test
+    fun `rescheduling after a long gap creates the missed doses as overdue without alarms`() = runTest {
+        val (schedule, _) = create(openEnded = true)
+        val later = now + 15 * day + hour
+
+        DoseRescheduler.rescheduleFutureDoses(context, schedules, nowMillis = later)
+
+        val doses = schedules.dosesSnapshot(schedule.id)
+        assertEquals((0..22).map { now + it * day }, doses.map { it.scheduledAtMillis })
+        assertEquals(true, doses.all { it.status.name == "PENDING" })
+        assertEquals((16..22).map { now + it * day }, alarms.scheduledAlarms.map { it.triggerAtTime }.sorted())
+    }
+
+    @Test
     fun `rescheduling a fixed schedule creates no new doses`() = runTest {
         val (schedule, _) = create(openEnded = false)
 
