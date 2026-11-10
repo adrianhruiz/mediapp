@@ -186,4 +186,102 @@ class EditScheduleViewModelTest {
         assertEquals(2, schedule.totalDoses)
         assertEquals(listOf(now, now + 12 * hour), alarms.scheduledAlarms.map { it.triggerAtTime }.sorted())
     }
+
+    private val day = 24 * hour
+
+    @Test
+    fun `an open-ended schedule is saved without a total and with a week of doses and alarms`() = runTest(dispatcher) {
+        val viewModel = CreateScheduleViewModel(
+            scheduleRepository,
+            reasonRepository,
+            SavedStateHandle(mapOf("nregistro" to "1", "nombre" to "Vitamina D")),
+            now = { now },
+        )
+        advanceUntilIdle()
+
+        viewModel.onIntervalPresetSelected(24)
+        viewModel.onOpenEndedChanged(true)
+        viewModel.onTotalDosesChanged("")
+        viewModel.onStartAtChanged(now)
+        viewModel.onReasonInputChanged("Déficit")
+        viewModel.save(context)
+        advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.isSaved)
+        val schedule = scheduleRepository.schedules.single()
+        assertTrue(schedule.openEnded)
+        assertEquals(0, schedule.totalDoses)
+        val expected = (0 until 7).map { now + it * day }
+        assertEquals(expected, scheduleRepository.dosesSnapshot(schedule.id).map { it.scheduledAtMillis })
+        assertEquals(expected, alarms.scheduledAlarms.map { it.triggerAtTime }.sorted())
+    }
+
+    @Test
+    fun `editing an open-ended schedule keeps done doses and regenerates the window with the new interval`() = runTest(dispatcher) {
+        val created = scheduleRepository.createSchedule(
+            nregistro = "1", nombreMedicamento = "Vitamina D", fotoUrl = null, intervalHours = 24,
+            totalDoses = 0, startAtMillis = start, reasonId = "r1", reasonNombre = "Déficit",
+            openEnded = true, nowMillis = start,
+        )
+        scheduleRepository.markDoseTaken(created.schedule.id, created.doses.first().id, "h1")
+        val viewModel = editViewModel(created.schedule.id)
+        assertTrue(viewModel.uiState.value.openEnded)
+        val next = now + hour
+
+        viewModel.onIntervalPresetSelected(48)
+        viewModel.onStartAtChanged(next)
+        viewModel.save(context)
+        advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.isSaved)
+        val schedule = scheduleRepository.getSchedule(created.schedule.id)!!
+        assertTrue(schedule.openEnded)
+        assertEquals(48, schedule.intervalHours)
+        val doses = scheduleRepository.dosesSnapshot(created.schedule.id)
+        assertEquals(DoseStatus.TAKEN, doses.first().status)
+        assertEquals(listOf(start) + (0..3).map { next + it * 2 * day }, doses.map { it.scheduledAtMillis })
+        assertEquals((1..5).toList(), doses.map { it.doseNumber })
+    }
+
+    @Test
+    fun `an open-ended schedule can be switched to a fixed total`() = runTest(dispatcher) {
+        val created = scheduleRepository.createSchedule(
+            nregistro = "1", nombreMedicamento = "Vitamina D", fotoUrl = null, intervalHours = 24,
+            totalDoses = 0, startAtMillis = start, reasonId = "r1", reasonNombre = "Déficit",
+            openEnded = true, nowMillis = start,
+        )
+        scheduleRepository.markDoseTaken(created.schedule.id, created.doses.first().id, "h1")
+        val viewModel = editViewModel(created.schedule.id)
+
+        viewModel.onOpenEndedChanged(false)
+        viewModel.onTotalDosesChanged("3")
+        viewModel.onStartAtChanged(now + hour)
+        viewModel.save(context)
+        advanceUntilIdle()
+
+        val schedule = scheduleRepository.getSchedule(created.schedule.id)!!
+        assertFalse(schedule.openEnded)
+        assertEquals(3, schedule.totalDoses)
+        assertEquals(3, scheduleRepository.dosesSnapshot(created.schedule.id).size)
+    }
+
+    @Test
+    fun `a fixed schedule can be switched to open-ended`() = runTest(dispatcher) {
+        val scheduleId = scheduleWithFirstDoseTaken()
+        val viewModel = editViewModel(scheduleId)
+        assertFalse(viewModel.uiState.value.openEnded)
+
+        viewModel.onOpenEndedChanged(true)
+        viewModel.onStartAtChanged(now + hour)
+        viewModel.save(context)
+        advanceUntilIdle()
+
+        val schedule = scheduleRepository.getSchedule(scheduleId)!!
+        assertTrue(schedule.openEnded)
+        assertEquals(0, schedule.totalDoses)
+        val doses = scheduleRepository.dosesSnapshot(scheduleId)
+        assertEquals(DoseStatus.TAKEN, doses.first().status)
+        // Cada 8 h durante 7 días desde la próxima toma: 21 nuevas tras la hecha.
+        assertEquals(22, doses.size)
+    }
 }

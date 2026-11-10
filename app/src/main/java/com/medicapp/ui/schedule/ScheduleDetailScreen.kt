@@ -30,7 +30,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.medicapp.domain.DoseInterval
 import com.medicapp.model.DoseStatus
 import com.medicapp.model.MedicationDose
 import com.medicapp.model.ScheduleStatus
@@ -82,7 +81,7 @@ fun ScheduleDetailScreen(
                 val takenCount = uiState.doses.count { it.status == DoseStatus.TAKEN }
                 Text(MedicationNames.split(schedule.nombreMedicamento).first, style = MaterialTheme.typography.headlineSmall)
                 Text(
-                    "${DoseInterval.label(schedule.intervalHours)} · $takenCount/${schedule.totalDoses} tomas",
+                    ScheduleTexts.detailSummary(schedule, takenCount),
                     style = MaterialTheme.typography.bodyMedium.copy(fontFamily = DmMono),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 4.dp),
@@ -98,7 +97,7 @@ fun ScheduleDetailScreen(
                         modifier = Modifier.padding(top = 12.dp),
                     ) {
                         SecondaryButton(onClick = { onEdit(schedule.id) }) { Text("Editar pauta") }
-                        SecondaryButton(onClick = { viewModel.closeSchedule(context) }) { Text("Cerrar periodo") }
+                        SecondaryButton(onClick = { viewModel.closeSchedule(context) }) { Text(ScheduleTexts.closeLabel(schedule)) }
                     }
                 }
             }
