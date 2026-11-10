@@ -45,7 +45,7 @@ data class CreateScheduleUiState(
     /** La edición no se pudo guardar (sin conexión o la pauta ya no está activa). */
     val saveFailed: Boolean = false,
 ) {
-    /** Intervalo en horas que se guardaría, o null si la cantidad está vacía o es cero. */
+    /** Intervalo en horas que se guardaría, o null si la cantidad está vacía, es cero o desborda. */
     val intervalHours: Int?
         get() = intervalAmountInput.toIntOrNull()
             ?.takeIf { it > 0 }

@@ -129,7 +129,7 @@ class CreateScheduleViewModelTest {
     }
 
     @Test
-    fun `typing 2 and choosing weeks saves a 336 hour interval`() = runTest(dispatcher) {
+    fun `typing 2 and choosing weeks gives a 336 hour interval`() = runTest(dispatcher) {
         val viewModel = newViewModel()
 
         viewModel.onIntervalAmountChanged("2")
@@ -146,6 +146,16 @@ class CreateScheduleViewModelTest {
         assertNull(viewModel.uiState.value.intervalHours)
 
         viewModel.onIntervalAmountChanged("0")
+        assertNull(viewModel.uiState.value.intervalHours)
+    }
+
+    @Test
+    fun `an amount that overflows the hours leaves the interval undefined`() = runTest(dispatcher) {
+        val viewModel = newViewModel()
+
+        viewModel.onIntervalAmountChanged("99999999")
+        viewModel.onIntervalUnitChanged(DoseInterval.Unit.WEEKS)
+
         assertNull(viewModel.uiState.value.intervalHours)
     }
 

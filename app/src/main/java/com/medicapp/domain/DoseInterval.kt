@@ -28,7 +28,12 @@ object DoseInterval {
     /** Intervalos de los chips rápidos, en horas: 8 h, 12 h, 1 y 2 días, 1, 2 y 4 semanas. */
     val presets: List<Int> = listOf(8, 12, 24, 48, 168, 336, 672)
 
-    fun toHours(amount: Int, unit: Unit): Int = amount * unit.hours
+    /**
+     * Horas equivalentes, o null si la cuenta no cabe en un Int: una cantidad absurda en
+     * semanas desbordaría a cero o a negativo y pasaría por un intervalo válido.
+     */
+    fun toHours(amount: Int, unit: Unit): Int? =
+        runCatching { Math.multiplyExact(amount, unit.hours) }.getOrNull()
 
     /**
      * Descompone unas horas en la unidad mayor que las divida exacto: 168 → 1 semana, 48 → 2
