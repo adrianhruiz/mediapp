@@ -6,7 +6,6 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.medicapp.data.repository.AuthRepository
 import com.medicapp.data.repository.FirestoreScheduleRepository
 import com.medicapp.data.repository.HistorySummary
-import com.medicapp.domain.DoseScheduleCalculator
 import kotlinx.coroutines.tasks.await
 import java.util.Date
 
@@ -151,16 +150,11 @@ private fun BackupSchedule.toFirestore() = mapOf(
     "intervalHours" to intervalHours,
     "totalDoses" to totalDoses,
     "startAtMillis" to startAtMillis,
-    // Una pauta editada no acaba donde dice la fórmula: manda la última de sus tomas.
-    FirestoreScheduleRepository.END_AT_FIELD to (
-        doses.maxOfOrNull { it.scheduledAtMillis }
-            ?: DoseScheduleCalculator.endAtMillis(startAtMillis, intervalHours, totalDoses)
-        ),
     "reasonId" to reasonId,
     "reasonNombre" to reasonNombre,
     "status" to status,
     "createdAt" to createdAtMillis.asTimestamp(),
-)
+) + progressFields()
 
 private fun BackupDose.toFirestore() = mapOf(
     "doseNumber" to doseNumber,
@@ -212,6 +206,7 @@ private fun DocumentSnapshot.toBackupSchedule(doses: List<BackupDose>) = BackupS
     status = getString("status").orEmpty(),
     createdAtMillis = millis("createdAt"),
     doses = doses,
+    openEnded = getBoolean(FirestoreScheduleRepository.OPEN_ENDED_FIELD) ?: false,
 )
 
 private fun DocumentSnapshot.toBackupDose() = BackupDose(
