@@ -91,9 +91,7 @@ class DoseAlarmReceiver : BroadcastReceiver() {
         val notification = NotificationCompat.Builder(context, NotificationChannels.DOSE_REMINDERS_CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_popup_reminder)
             .setContentTitle(if (reminder) "Sin tomar: $nombreMedicamento" else "Hora de tomar $nombreMedicamento")
-            .setContentText(
-                if (reminder) "Toma $doseNumber de $totalDoses · aún no la has marcada" else "Toma $doseNumber de $totalDoses",
-            )
+            .setContentText(DoseNotificationText.content(doseNumber, totalDoses, reminder))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
             .setContentIntent(contentPendingIntent)
