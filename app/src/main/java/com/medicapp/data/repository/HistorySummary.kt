@@ -1,5 +1,7 @@
 package com.medicapp.data.repository
 
+import com.medicapp.model.SavedMedication
+
 /**
  * Resumen de qué medicamentos hay en el historial, en un único documento.
  *
@@ -13,11 +15,18 @@ package com.medicapp.data.repository
  * Es un contador y no una lista de sí/no porque el mismo medicamento puede estar varias veces
  * con motivos distintos: borrar una de esas entradas no debe quitar el distintivo mientras
  * queden otras.
+ *
+ * Además guarda nombre y foto de cada medicamento (campo `medicamentos`), para que la búsqueda
+ * pueda enseñar lo que ya está en el historial sin depender de CIMA: los medicamentos propios no
+ * están allí y antes no volvían a salir al buscarlos.
  */
 object HistorySummary {
     const val COLLECTION = "summaries"
     const val DOCUMENT = "historyMedications"
     const val NREGISTROS_FIELD = "nregistros"
+    const val MEDICAMENTOS_FIELD = "medicamentos"
+    private const val NOMBRE_FIELD = "nombre"
+    private const val FOTO_URL_FIELD = "fotoUrl"
 
     /**
      * Los medicamentos que siguen teniendo alguna entrada.
@@ -35,4 +44,54 @@ object HistorySummary {
         .groupingBy { it }
         .eachCount()
         .mapValues { (_, count) -> count.toLong() }
+
+    /** Lo que se guarda de un medicamento dentro de `medicamentos`. */
+    fun medicationInfo(nombre: String, fotoUrl: String?): Map<String, Any?> =
+        mapOf(NOMBRE_FIELD to nombre, FOTO_URL_FIELD to fotoUrl)
+
+    /**
+     * Los medicamentos que siguen teniendo alguna entrada, con su nombre y su foto. Si a alguno le
+     * falta el nombre se deja fuera: [shouldRebuild] ya se encarga de rehacer el resumen.
+     */
+    fun savedMedications(counts: Map<String, Any?>?, medicamentos: Map<String, Any?>?): List<SavedMedication> =
+        nregistrosWithEntries(counts).mapNotNull { nregistro ->
+            val info = medicamentos?.get(nregistro) as? Map<*, *> ?: return@mapNotNull null
+            val nombre = info[NOMBRE_FIELD] as? String ?: return@mapNotNull null
+            SavedMedication(nregistro, nombre, info[FOTO_URL_FIELD] as? String)
+        }
+
+    /**
+     * Si hay que rehacer el resumen leyendo el historial entero.
+     *
+     * Se rehace cuando no existe y también cuando algún medicamento contado no tiene nombre: es
+     * el caso de un resumen de antes de guardar nombres, aunque una entrada nueva ya le haya
+     * añadido el suyo por merge. Tras rehacerlo todos lo tienen, así que solo pasa una vez.
+     *
+     * Sin respuesta del servidor ([fromServer] falso) no sabemos si falta o es que aún no ha
+     * llegado; rehacerlo con esa duda escribiría un resumen a medias.
+     */
+    fun shouldRebuild(
+        exists: Boolean,
+        fromServer: Boolean,
+        counts: Map<String, Any?>?,
+        medicamentos: Map<String, Any?>?,
+    ): Boolean {
+        if (!fromServer) return false
+        if (!exists || medicamentos == null) return true
+        return nregistrosWithEntries(counts).any { nregistro ->
+            (medicamentos[nregistro] as? Map<*, *>)?.get(NOMBRE_FIELD) !is String
+        }
+    }
+
+    /**
+     * El resumen completo a partir de las entradas del historial, una por entrada (repetidas
+     * incluidas). Escribe siempre `medicamentos`, aunque vacío, para que [shouldRebuild] no vuelva
+     * a pedirlo con un historial sin entradas.
+     */
+    fun rebuild(entries: List<SavedMedication>): Map<String, Any> = mapOf(
+        NREGISTROS_FIELD to countByNregistro(entries.map { it.nregistro }),
+        MEDICAMENTOS_FIELD to entries.groupBy { it.nregistro }.mapValues { (_, same) ->
+            medicationInfo(same.first().nombre, same.firstNotNullOfOrNull { it.fotoUrl })
+        },
+    )
 }

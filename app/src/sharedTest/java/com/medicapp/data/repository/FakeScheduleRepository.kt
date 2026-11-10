@@ -5,6 +5,7 @@ import com.medicapp.domain.ScheduleEditPlanner
 import com.medicapp.model.DoseStatus
 import com.medicapp.model.MedicationDose
 import com.medicapp.model.MedicationSchedule
+import com.medicapp.model.SavedMedication
 import com.medicapp.model.ScheduleStatus
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -83,8 +84,10 @@ class FakeScheduleRepository : ScheduleRepository {
         )
     }
 
-    override fun getActiveScheduleNregistros(): Flow<Set<String>> = schedulesFlow.map { schedules ->
-        schedules.filter { it.status == ScheduleStatus.ACTIVE }.map { it.nregistro }.toSet()
+    override fun getActiveScheduleNregistros(): Flow<List<SavedMedication>> = schedulesFlow.map { schedules ->
+        schedules.filter { it.status == ScheduleStatus.ACTIVE }
+            .distinctBy { it.nregistro }
+            .map { SavedMedication(it.nregistro, it.nombreMedicamento, it.fotoUrl) }
     }
 
     override fun getDoses(scheduleId: String): Flow<List<MedicationDose>> = dosesFlow(scheduleId)
