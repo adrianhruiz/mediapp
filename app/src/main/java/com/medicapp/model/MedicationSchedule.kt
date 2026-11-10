@@ -11,4 +11,10 @@ data class MedicationSchedule(
     val reasonId: String,
     val reasonNombre: String,
     val status: ScheduleStatus,
+    /**
+     * Pauta sin fin: no tiene total ([totalDoses] vale 0) y dura hasta que se cierra a mano. Sus
+     * tomas se van creando por delante en una ventana de días (ver
+     * `DoseScheduleCalculator.openEndedWindow`).
+     */
+    val openEnded: Boolean = false,
 )

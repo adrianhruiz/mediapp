@@ -22,6 +22,7 @@ import com.medicapp.data.repository.ScheduleRepository
 import com.medicapp.data.remote.ChemblAtcEnglishNameSource
 import com.medicapp.domain.AllergyTranslator
 import com.medicapp.domain.DoseTaker
+import com.medicapp.notifications.DoseAlarmScheduler
 import com.medicapp.notifications.DoseRescheduler
 import com.medicapp.notifications.SessionDoseRescheduler
 import kotlinx.coroutines.CoroutineScope
@@ -67,7 +68,22 @@ class AppContainer(context: Context) {
     val scheduleRepository: ScheduleRepository =
         FirestoreScheduleRepository(FirebaseModule.firestore, authRepository)
 
-    val doseTaker = DoseTaker(scheduleRepository, medicationHistoryRepository)
+    /** Las tomas que repone una pauta sin fin al marcar una llevan alarma como las demás. */
+    val doseTaker = DoseTaker(
+        scheduleRepository,
+        medicationHistoryRepository,
+        scheduleAlarms = { schedule, doses ->
+            doses.forEach { dose ->
+                DoseAlarmScheduler.scheduleDose(
+                    context.applicationContext,
+                    schedule.id,
+                    dose,
+                    schedule.nombreMedicamento,
+                    schedule.totalDoses,
+                )
+            }
+        },
+    )
 
     val backupRepository: BackupRepository =
         FirestoreBackupRepository(FirebaseModule.firestore, authRepository)

@@ -295,8 +295,16 @@ class FirestoreScheduleRepository(
         startAtMillis: Long,
         reasonId: String,
         reasonNombre: String,
+        openEnded: Boolean,
+        nowMillis: Long,
     ): ScheduleWithDoses {
         val scheduleRef = schedulesCollection().document()
+        val storedTotal = if (openEnded) 0 else totalDoses
+        val doseTimes = if (openEnded) {
+            DoseScheduleCalculator.openEndedWindow(startAtMillis, intervalHours, nowMillis)
+        } else {
+            DoseScheduleCalculator.computeDoseTimes(startAtMillis, intervalHours, totalDoses)
+        }
         val batch = firestore.batch()
         batch.set(
             scheduleRef,
@@ -305,17 +313,19 @@ class FirestoreScheduleRepository(
                 "nombreMedicamento" to nombreMedicamento,
                 "fotoUrl" to fotoUrl,
                 "intervalHours" to intervalHours,
-                "totalDoses" to totalDoses,
+                "totalDoses" to storedTotal,
                 "startAtMillis" to startAtMillis,
                 "reasonId" to reasonId,
                 "reasonNombre" to reasonNombre,
                 "status" to ScheduleStatus.ACTIVE.name,
-                PendingDoseCounter.FIELD to totalDoses,
-                END_AT_FIELD to DoseScheduleCalculator.endAtMillis(startAtMillis, intervalHours, totalDoses),
+                OPEN_ENDED_FIELD to openEnded,
+                PendingDoseCounter.FIELD to doseTimes.size,
+                LAST_DOSE_NUMBER_FIELD to doseTimes.size,
+                // En una pauta sin fin es la última toma creada hasta ahora; avanza al reponer.
+                END_AT_FIELD to (doseTimes.lastOrNull() ?: startAtMillis),
                 "createdAt" to FieldValue.serverTimestamp(),
             ),
         )
-        val doseTimes = DoseScheduleCalculator.computeDoseTimes(startAtMillis, intervalHours, totalDoses)
         val doses = doseTimes.mapIndexed { index, scheduledAtMillis ->
             val doseNumber = index + 1
             val doseRef = dosesCollection(scheduleRef.id).document()
@@ -344,11 +354,12 @@ class FirestoreScheduleRepository(
             nombreMedicamento = nombreMedicamento,
             fotoUrl = fotoUrl,
             intervalHours = intervalHours,
-            totalDoses = totalDoses,
+            totalDoses = storedTotal,
             startAtMillis = startAtMillis,
             reasonId = reasonId,
             reasonNombre = reasonNombre,
             status = ScheduleStatus.ACTIVE,
+            openEnded = openEnded,
         )
         return ScheduleWithDoses(schedule, doses)
     }
@@ -370,6 +381,8 @@ class FirestoreScheduleRepository(
         nextDoseAtMillis: Long,
         reasonId: String,
         reasonNombre: String,
+        openEnded: Boolean,
+        nowMillis: Long,
     ): ScheduleEditResult? {
         val scheduleRef = schedulesCollection().document(scheduleId)
         repeat(MAX_EDIT_ATTEMPTS) {
@@ -377,7 +390,7 @@ class FirestoreScheduleRepository(
             val doseRefs = dosesCollection(scheduleId).get().await().documents.map { it.reference }
             val outcome = runEditTransaction(
                 scheduleRef, doseRefs, editVersion, scheduleId,
-                intervalHours, totalDoses, nextDoseAtMillis, reasonId, reasonNombre,
+                intervalHours, totalDoses, nextDoseAtMillis, reasonId, reasonNombre, openEnded, nowMillis,
             )
             if (outcome !== StaleDoseList) return outcome as ScheduleEditResult?
         }
@@ -395,6 +408,8 @@ class FirestoreScheduleRepository(
         nextDoseAtMillis: Long,
         reasonId: String,
         reasonNombre: String,
+        openEnded: Boolean,
+        nowMillis: Long,
     ): Any? =
         firestore.runTransaction { transaction ->
             val scheduleSnapshot = transaction.get(scheduleRef)
@@ -402,8 +417,12 @@ class FirestoreScheduleRepository(
             val schedule = scheduleSnapshot.toMedicationSchedule()
             if (schedule?.status != ScheduleStatus.ACTIVE) return@runTransaction null
             val doses = doseRefs.mapNotNull { transaction.get(it).toMedicationDose(scheduleId) }
-            val plan = ScheduleEditPlanner.plan(doses, intervalHours, totalDoses, nextDoseAtMillis)
-                ?: return@runTransaction null
+            val plan = if (openEnded) {
+                ScheduleEditPlanner.planOpenEnded(doses, intervalHours, nextDoseAtMillis, nowMillis)
+            } else {
+                ScheduleEditPlanner.plan(doses, intervalHours, totalDoses, nextDoseAtMillis)
+            } ?: return@runTransaction null
+            val storedTotal = if (openEnded) 0 else totalDoses
 
             val removed = doses.filter { it.status == DoseStatus.PENDING }
             removed.forEach { transaction.delete(dosesCollection(scheduleId).document(it.id)) }
@@ -434,10 +453,12 @@ class FirestoreScheduleRepository(
                 scheduleRef,
                 mapOf(
                     "intervalHours" to intervalHours,
-                    "totalDoses" to totalDoses,
+                    "totalDoses" to storedTotal,
                     "startAtMillis" to plan.startAtMillis,
                     "reasonId" to reasonId,
                     "reasonNombre" to reasonNombre,
+                    OPEN_ENDED_FIELD to openEnded,
+                    LAST_DOSE_NUMBER_FIELD to doses.size - removed.size + newDoses.size,
                     PendingDoseCounter.FIELD to newDoses.size,
                     END_AT_FIELD to plan.endAtMillis,
                     EDIT_VERSION_FIELD to editVersion + 1,
@@ -446,7 +467,8 @@ class FirestoreScheduleRepository(
             ScheduleEditResult(
                 schedule = schedule.copy(
                     intervalHours = intervalHours,
-                    totalDoses = totalDoses,
+                    totalDoses = storedTotal,
+                    openEnded = openEnded,
                     startAtMillis = plan.startAtMillis,
                     reasonId = reasonId,
                     reasonNombre = reasonNombre,
@@ -462,10 +484,15 @@ class FirestoreScheduleRepository(
      *
      * El contador se resta con `increment` en vez de escribir el número calculado: si dos dosis
      * se marcan a la vez —desde la notificación y desde la pantalla— ninguna pisa a la otra.
+     *
+     * Una pauta sin fin nunca se cierra aquí: quedarse sin pendientes solo significa que toca
+     * reponer (ver [replenishOpenEndedDoses]).
      */
     override suspend fun markDoseTaken(scheduleId: String, doseId: String, historyEntryId: String) {
         val scheduleRef = schedulesCollection().document(scheduleId)
-        val pendingBefore = scheduleRef.get().await().getLong(PendingDoseCounter.FIELD)
+        val scheduleSnapshot = scheduleRef.get().await()
+        val pendingBefore = scheduleSnapshot.getLong(PendingDoseCounter.FIELD)
+        val openEnded = scheduleSnapshot.getBoolean(OPEN_ENDED_FIELD) == true
 
         val batch = firestore.batch()
         batch.update(dosesCollection(scheduleId).document(doseId), takenDoseData(historyEntryId))
@@ -473,29 +500,97 @@ class FirestoreScheduleRepository(
         if (pendingBefore == null) {
             // Pauta anterior al contador: se cuenta a mano esta vez y se deja puesto.
             batch.commit().await()
-            backfillPendingDoses(scheduleId, scheduleRef)
+            backfillPendingDoses(scheduleId, scheduleRef, openEnded)
             return
         }
 
         val pendingAfter = PendingDoseCounter.pendingAfterTaking(pendingBefore)
-        batch.update(scheduleRef, scheduleUpdate(FieldValue.increment(-1), pendingAfter))
+        batch.update(scheduleRef, scheduleUpdate(FieldValue.increment(-1), pendingAfter, openEnded))
         batch.commit().await()
     }
 
-    private suspend fun backfillPendingDoses(scheduleId: String, scheduleRef: DocumentReference) {
+    private suspend fun backfillPendingDoses(scheduleId: String, scheduleRef: DocumentReference, openEnded: Boolean) {
         val pendingAfter = dosesCollection(scheduleId)
             .whereEqualTo("status", DoseStatus.PENDING.name)
             .get()
             .await()
             .size()
             .toLong()
-        scheduleRef.update(scheduleUpdate(pendingAfter, pendingAfter)).await()
+        scheduleRef.update(scheduleUpdate(pendingAfter, pendingAfter, openEnded)).await()
     }
 
-    /** Deja la cuenta pendiente y, si era la última dosis, cierra la pauta de paso. */
-    private fun scheduleUpdate(pendingValue: Any, pendingAfter: Long): Map<String, Any> = buildMap {
+    /** Deja la cuenta pendiente y, si era la última dosis de una pauta con total, la cierra de paso. */
+    private fun scheduleUpdate(pendingValue: Any, pendingAfter: Long, openEnded: Boolean): Map<String, Any> = buildMap {
         put(PendingDoseCounter.FIELD, pendingValue)
-        if (PendingDoseCounter.closesSchedule(pendingAfter)) put("status", ScheduleStatus.CLOSED.name)
+        if (!openEnded && PendingDoseCounter.closesSchedule(pendingAfter)) put("status", ScheduleStatus.CLOSED.name)
+    }
+
+    /**
+     * Va en una transacción sobre el documento de la pauta: reponer se lanza a la vez desde
+     * sitios distintos (marcar una toma, abrir la app, reiniciar el móvil) y, con un lote, dos
+     * reposiciones a la vez crearían las mismas tomas dos veces. La transacción solo lee la
+     * pauta: [END_AT_FIELD] y [LAST_DOSE_NUMBER_FIELD] dicen dónde se quedó, sin consultar sus
+     * tomas. Las tomas nuevas no cambian el modelo de la pauta, así que no reabren los
+     * listeners de [observeDosesBetween].
+     */
+    override suspend fun replenishOpenEndedDoses(scheduleId: String, nowMillis: Long): List<MedicationDose> {
+        val scheduleRef = schedulesCollection().document(scheduleId)
+        return firestore.runTransaction { transaction ->
+            val snapshot = transaction.get(scheduleRef)
+            val schedule = snapshot.toMedicationSchedule()
+            if (schedule == null || !schedule.openEnded || schedule.status != ScheduleStatus.ACTIVE) {
+                return@runTransaction emptyList<MedicationDose>()
+            }
+            val lastAt = snapshot.getLong(END_AT_FIELD) ?: return@runTransaction emptyList<MedicationDose>()
+            val lastNumber = (snapshot.getLong(LAST_DOSE_NUMBER_FIELD) ?: return@runTransaction emptyList<MedicationDose>()).toInt()
+            val times = DoseScheduleCalculator.openEndedReplenish(lastAt, schedule.intervalHours, nowMillis)
+            if (times.isEmpty()) return@runTransaction emptyList<MedicationDose>()
+
+            val added = times.mapIndexed { index, scheduledAtMillis ->
+                val doseRef = dosesCollection(scheduleId).document()
+                val doseNumber = lastNumber + index + 1
+                transaction.set(
+                    doseRef,
+                    mapOf(
+                        "doseNumber" to doseNumber,
+                        "scheduledAtMillis" to scheduledAtMillis,
+                        "status" to DoseStatus.PENDING.name,
+                    ),
+                )
+                MedicationDose(
+                    id = doseRef.id,
+                    scheduleId = scheduleId,
+                    doseNumber = doseNumber,
+                    scheduledAtMillis = scheduledAtMillis,
+                    status = DoseStatus.PENDING,
+                    takenAtMillis = null,
+                    historyEntryId = null,
+                )
+            }
+            transaction.update(
+                scheduleRef,
+                mapOf(
+                    END_AT_FIELD to times.last(),
+                    LAST_DOSE_NUMBER_FIELD to lastNumber + times.size,
+                    PendingDoseCounter.FIELD to FieldValue.increment(times.size.toLong()),
+                ),
+            )
+            added
+        }.await()
+    }
+
+    /** Solo las pautas activas y sin fin: dos igualdades, que Firestore resuelve sin índice compuesto. */
+    override suspend fun replenishOpenEndedSchedules(nowMillis: Long) {
+        schedulesCollection()
+            .whereEqualTo("status", ScheduleStatus.ACTIVE.name)
+            .whereEqualTo(OPEN_ENDED_FIELD, true)
+            .get()
+            .await()
+            .documents
+            .forEach { doc ->
+                runCatching { replenishOpenEndedDoses(doc.id, nowMillis) }
+                    .onFailure { Log.w("ScheduleRepository", "Could not replenish open-ended schedule", it) }
+            }
     }
 
     private fun takenDoseData(historyEntryId: String) = mapOf(
@@ -544,6 +639,12 @@ class FirestoreScheduleRepository(
         /** Hora de la última toma de la pauta, para filtrar pautas por fechas en la consulta. */
         const val END_AT_FIELD = "endAtMillis"
 
+        /** Pauta sin fin: dura hasta que se cierra y repone sus tomas por delante. */
+        const val OPEN_ENDED_FIELD = "openEnded"
+
+        /** Número de la última toma creada, para seguir numerando las que se reponen. */
+        const val LAST_DOSE_NUMBER_FIELD = "lastDoseNumber"
+
         /** Cuenta de ediciones de la pauta, para detectar dos ediciones a la vez. */
         private const val EDIT_VERSION_FIELD = "editVersion"
 
@@ -576,6 +677,7 @@ private fun DocumentSnapshot.toMedicationSchedule(): MedicationSchedule? {
         reasonId = getString("reasonId") ?: return null,
         reasonNombre = getString("reasonNombre") ?: return null,
         status = status,
+        openEnded = getBoolean(FirestoreScheduleRepository.OPEN_ENDED_FIELD) ?: false,
     )
 }
 
