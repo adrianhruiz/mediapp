@@ -13,6 +13,7 @@ import com.medicapp.model.TakenEntry
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import java.util.concurrent.atomic.AtomicBoolean
@@ -88,7 +89,10 @@ class FirestoreMedicationHistoryRepository(
      * completo, que es justo lo que antes se hacía en cada consulta.
      */
     override fun getMedicationNregistros(): Flow<List<SavedMedication>> = callbackFlow {
-        val registration = summaryDocument().addSnapshotListener { snapshot, error ->
+        val gate = HistorySummary.RebuildGate()
+        // Con metadatos: un resumen viejo que llega de la caché solo se rehace cuando el servidor
+        // lo confirma, y esa confirmación trae los mismos datos, así que sin INCLUDE no llegaría.
+        val registration = summaryDocument().addSnapshotListener(MetadataChanges.INCLUDE) { snapshot, error ->
             if (error != null) {
                 Log.w("MedicationHistoryRepository", "Medication summary listener failed", error)
                 trySend(emptyList())
@@ -100,20 +104,23 @@ class FirestoreMedicationHistoryRepository(
             val medicamentos = snapshot?.get(HistorySummary.MEDICAMENTOS_FIELD) as? Map<String, Any?>
             trySend(HistorySummary.savedMedications(counts, medicamentos))
 
-            val rebuild = HistorySummary.shouldRebuild(
+            val rebuild = gate.shouldRebuild(
                 exists = snapshot?.exists() == true,
                 fromServer = snapshot?.metadata?.isFromCache == false,
                 counts = counts,
                 medicamentos = medicamentos,
             )
-            if (rebuild) launch { rebuildSummary() }
+            if (rebuild) launch { if (!rebuildSummary()) gate.onRebuildFailed() }
         }
         awaitClose { registration.remove() }
     }
+        // Los avisos que solo cambian metadatos traen la misma lista: no se reemiten.
+        .distinctUntilChanged()
 
-    private suspend fun rebuildSummary() {
-        if (!rebuildingSummary.compareAndSet(false, true)) return
-        try {
+    /** Devuelve si el resumen quedó rehecho; si otro listener ya lo estaba rehaciendo, también. */
+    private suspend fun rebuildSummary(): Boolean {
+        if (!rebuildingSummary.compareAndSet(false, true)) return true
+        return try {
             val entries = collection().get().await().documents.mapNotNull { doc ->
                 val nregistro = doc.getString("nregistro") ?: return@mapNotNull null
                 // Sin nombre se usa el número de registro: así todos los contados tienen uno y el
@@ -121,10 +128,12 @@ class FirestoreMedicationHistoryRepository(
                 SavedMedication(nregistro, doc.getString("nombreMedicamento") ?: nregistro, doc.getString("fotoUrl"))
             }
             summaryDocument().set(HistorySummary.rebuild(entries)).await()
+            true
         } catch (e: Exception) {
-            // Si falla, el resumen sigue sin rehacer y volverá a intentarse; mientras tanto la
-            // búsqueda solo pierde los distintivos y los guardados del historial.
+            // Si falla, el resumen sigue sin rehacer y volverá a intentarse con el siguiente aviso
+            // del servidor; mientras tanto los guardados del historial no salen en la búsqueda.
             Log.w("MedicationHistoryRepository", "No se pudo rehacer el resumen del historial", e)
+            false
         } finally {
             rebuildingSummary.set(false)
         }

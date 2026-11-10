@@ -147,4 +147,44 @@ class HistorySummaryTest {
             rebuilt[HistorySummary.MEDICAMENTOS_FIELD],
         )
     }
+
+    @Test
+    fun `an old summary without names still marks every medication with entries`() {
+        // Los distintivos salen de los contadores, como antes: no pueden esperar a que se rehaga.
+        val counts = mapOf<String, Any?>("51234" to 1L, "60001" to 0L)
+
+        assertEquals(listOf("51234"), HistorySummary.savedMedications(counts, medicamentos = null).map { it.nregistro })
+    }
+
+    @Test
+    fun `a medication without a name is never found by a search`() {
+        val saved = HistorySummary.savedMedications(mapOf("51234" to 1L), medicamentos = null)
+
+        assertEquals("", saved.single().nombre)
+        assertEquals(emptyList<SavedMedication>(), com.medicapp.ui.search.SavedMedicationSearch.filter(saved, "51234"))
+    }
+
+    @Test
+    fun `an old summary first read from cache is rebuilt once the server confirms it`() {
+        val gate = HistorySummary.RebuildGate()
+        val counts = mapOf<String, Any?>("51234" to 1L)
+
+        // Sin conexión no se rehace: con la caché no sabemos si el resumen está al día.
+        assertFalse(gate.shouldRebuild(exists = true, fromServer = false, counts = counts, medicamentos = null))
+        // El servidor lo confirma con los mismos datos: ahora sí, una vez.
+        assertTrue(gate.shouldRebuild(exists = true, fromServer = true, counts = counts, medicamentos = null))
+        // Más avisos de metadatos con el resumen viejo, mientras se escribe el nuevo: no repite.
+        assertFalse(gate.shouldRebuild(exists = true, fromServer = true, counts = counts, medicamentos = null))
+    }
+
+    @Test
+    fun `a failed rebuild is retried on the next server snapshot`() {
+        val gate = HistorySummary.RebuildGate()
+        val counts = mapOf<String, Any?>("51234" to 1L)
+
+        assertTrue(gate.shouldRebuild(exists = true, fromServer = true, counts = counts, medicamentos = null))
+        gate.onRebuildFailed()
+
+        assertTrue(gate.shouldRebuild(exists = true, fromServer = true, counts = counts, medicamentos = null))
+    }
 }

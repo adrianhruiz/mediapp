@@ -1,6 +1,7 @@
 package com.medicapp.data.repository
 
 import com.medicapp.model.SavedMedication
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Resumen de qué medicamentos hay en el historial, en un único documento.
@@ -50,14 +51,16 @@ object HistorySummary {
         mapOf(NOMBRE_FIELD to nombre, FOTO_URL_FIELD to fotoUrl)
 
     /**
-     * Los medicamentos que siguen teniendo alguna entrada, con su nombre y su foto. Si a alguno le
-     * falta el nombre se deja fuera: [shouldRebuild] ya se encarga de rehacer el resumen.
+     * Los medicamentos que siguen teniendo alguna entrada, con su nombre y su foto.
+     *
+     * Salen de los contadores, como los distintivos de antes: un resumen antiguo sin nombres
+     * sigue marcando todo lo que hay en el historial mientras [shouldRebuild] lo rehace. Al que le
+     * falta el nombre se le deja vacío, y un nombre vacío no coincide con ninguna búsqueda.
      */
     fun savedMedications(counts: Map<String, Any?>?, medicamentos: Map<String, Any?>?): List<SavedMedication> =
-        nregistrosWithEntries(counts).mapNotNull { nregistro ->
-            val info = medicamentos?.get(nregistro) as? Map<*, *> ?: return@mapNotNull null
-            val nombre = info[NOMBRE_FIELD] as? String ?: return@mapNotNull null
-            SavedMedication(nregistro, nombre, info[FOTO_URL_FIELD] as? String)
+        nregistrosWithEntries(counts).map { nregistro ->
+            val info = medicamentos?.get(nregistro) as? Map<*, *>
+            SavedMedication(nregistro, info?.get(NOMBRE_FIELD) as? String ?: "", info?.get(FOTO_URL_FIELD) as? String)
         }
 
     /**
@@ -94,4 +97,30 @@ object HistorySummary {
             medicationInfo(same.first().nombre, same.firstNotNullOfOrNull { it.fotoUrl })
         },
     )
+
+    /**
+     * Decide, snapshot a snapshot de un mismo listener, cuándo lanzar la reconstrucción.
+     *
+     * El listener escucha también los cambios de metadatos, porque en un móvil que viene de la
+     * versión anterior el resumen viejo llega primero de la caché y la confirmación del servidor
+     * trae los mismos datos: sin metadatos esa confirmación no se recibe y no se rehace nunca.
+     * A cambio llegan más avisos con el resumen viejo mientras se escribe el nuevo; esta puerta
+     * deja pasar solo la primera petición hasta que la reconstrucción falle.
+     */
+    class RebuildGate {
+        private val requested = AtomicBoolean(false)
+
+        fun shouldRebuild(
+            exists: Boolean,
+            fromServer: Boolean,
+            counts: Map<String, Any?>?,
+            medicamentos: Map<String, Any?>?,
+        ): Boolean = HistorySummary.shouldRebuild(exists, fromServer, counts, medicamentos) &&
+            requested.compareAndSet(false, true)
+
+        /** Si la reconstrucción falla se puede volver a pedir con el siguiente snapshot. */
+        fun onRebuildFailed() {
+            requested.set(false)
+        }
+    }
 }
