@@ -225,11 +225,13 @@ class FakeScheduleRepository : ScheduleRepository {
     override suspend fun getPendingDoses(scheduleId: String): List<MedicationDose> =
         dosesFlow(scheduleId).value.filter { it.status == DoseStatus.PENDING }
 
-    override suspend fun closeSchedule(scheduleId: String) {
+    override suspend fun closeSchedule(scheduleId: String): List<String> {
+        val skipped = dosesFlow(scheduleId).value.filter { it.status == DoseStatus.PENDING }.map { it.id }
         dosesFlow(scheduleId).value = dosesFlow(scheduleId).value.map { dose ->
             if (dose.status == DoseStatus.PENDING) dose.copy(status = DoseStatus.SKIPPED) else dose
         }
         closeScheduleStatusOnly(scheduleId)
+        return skipped
     }
 
     override suspend fun getActiveSchedulesWithPendingDoses(): List<ScheduleWithDoses> =

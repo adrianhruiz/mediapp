@@ -118,4 +118,51 @@ class DoseTakerTest {
         assertTrue(schedules.dosesSnapshot(schedule.id).all { it.status == DoseStatus.SKIPPED })
         assertTrue(schedules.replenishOpenEndedDoses(schedule.id, now + 30 * day).isEmpty())
     }
+
+    @Test
+    fun `closing after a refill skips the refilled doses too and reports every skipped dose`() = runTest {
+        val (schedule, doses) = schedules.createSchedule(
+            nregistro = "1", nombreMedicamento = "Vitamina D", fotoUrl = null, intervalHours = 24,
+            totalDoses = 0, startAtMillis = now, reasonId = "r1", reasonNombre = "Déficit",
+            openEnded = true, nowMillis = now,
+        )
+        schedules.markDoseTaken(schedule.id, doses.first().id, "h1")
+        val refilled = schedules.replenishOpenEndedDoses(schedule.id, now + day)
+        assertEquals(1, refilled.size)
+
+        val skipped = schedules.closeSchedule(schedule.id)
+
+        val after = schedules.dosesSnapshot(schedule.id)
+        assertEquals(after.filter { it.status == DoseStatus.SKIPPED }.map { it.id }.toSet(), skipped.toSet())
+        assertTrue(refilled.single().id in skipped)
+        assertEquals(DoseStatus.TAKEN, after.first().status)
+        assertTrue(after.none { it.status == DoseStatus.PENDING })
+    }
+
+    @Test
+    fun `a refill landing on a closed schedule creates no doses`() = runTest {
+        val (schedule, _) = schedules.createSchedule(
+            nregistro = "1", nombreMedicamento = "Vitamina D", fotoUrl = null, intervalHours = 24,
+            totalDoses = 0, startAtMillis = now, reasonId = "r1", reasonNombre = "Déficit",
+            openEnded = true, nowMillis = now,
+        )
+        schedules.closeSchedule(schedule.id)
+        val before = schedules.dosesSnapshot(schedule.id)
+
+        assertTrue(schedules.replenishOpenEndedDoses(schedule.id, now + day).isEmpty())
+        schedules.replenishOpenEndedSchedules(now + day)
+        assertEquals(before, schedules.dosesSnapshot(schedule.id))
+    }
+
+    @Test
+    fun `closing a fixed schedule still skips only its pending doses`() = runTest {
+        val (schedule, doses) = createSchedule()
+        schedules.markDoseTaken(schedule.id, doses.first().id, "h1")
+
+        val skipped = schedules.closeSchedule(schedule.id)
+
+        assertEquals(listOf(doses.last().id), skipped)
+        assertEquals(listOf(DoseStatus.TAKEN, DoseStatus.SKIPPED), schedules.dosesSnapshot(schedule.id).map { it.status })
+        assertEquals(ScheduleStatus.CLOSED, schedules.getSchedule(schedule.id)!!.status)
+    }
 }
