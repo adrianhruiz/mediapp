@@ -532,6 +532,10 @@ class FirestoreScheduleRepository(
      * pauta: [END_AT_FIELD] y [LAST_DOSE_NUMBER_FIELD] dicen dónde se quedó, sin consultar sus
      * tomas. Las tomas nuevas no cambian el modelo de la pauta, así que no reabren los
      * listeners de [observeDosesBetween].
+     *
+     * Sube [EDIT_VERSION_FIELD] porque cambia la lista de tomas: una edición o un cierre que la
+     * pidieron antes la descartan y la vuelven a pedir, en vez de dejar viva la toma repuesta con
+     * la frecuencia vieja. Si la pauta ya se cerró, no crea nada.
      */
     override suspend fun replenishOpenEndedDoses(scheduleId: String, nowMillis: Long): List<MedicationDose> {
         val scheduleRef = schedulesCollection().document(scheduleId)
@@ -573,6 +577,7 @@ class FirestoreScheduleRepository(
                     END_AT_FIELD to times.last(),
                     LAST_DOSE_NUMBER_FIELD to lastNumber + times.size,
                     PendingDoseCounter.FIELD to FieldValue.increment(times.size.toLong()),
+                    EDIT_VERSION_FIELD to FieldValue.increment(1),
                 ),
             )
             added
@@ -607,20 +612,47 @@ class FirestoreScheduleRepository(
             .documents
             .mapNotNull { it.toMedicationDose(scheduleId) }
 
-    override suspend fun closeSchedule(scheduleId: String) {
-        val pendingDoses = dosesCollection(scheduleId)
-            .whereEqualTo("status", DoseStatus.PENDING.name)
-            .get()
-            .await()
-        val batch = firestore.batch()
-        pendingDoses.documents.forEach { doc ->
-            batch.update(doc.reference, "status", DoseStatus.SKIPPED.name)
+    /**
+     * Mismo patrón que [updateSchedule]: las pendientes se piden antes junto con
+     * [EDIT_VERSION_FIELD] y se cierran en una transacción que lo vuelve a leer. Si una
+     * reposición (o una edición) se coló entre medias, la lista ya no vale y se pide de nuevo;
+     * con un lote, la toma repuesta quedaría pendiente bajo una pauta cerrada, con su alarma.
+     * Por eso cerrar necesita conexión, como editar.
+     *
+     * Dentro de la transacción cada toma se vuelve a leer y solo se omite si sigue pendiente:
+     * una que se marcó desde la notificación mientras tanto se queda como tomada.
+     */
+    override suspend fun closeSchedule(scheduleId: String): List<String> {
+        val scheduleRef = schedulesCollection().document(scheduleId)
+        repeat(MAX_EDIT_ATTEMPTS) {
+            val editVersion = scheduleRef.get().await().editVersion()
+            val pendingRefs = dosesCollection(scheduleId)
+                .whereEqualTo("status", DoseStatus.PENDING.name)
+                .get()
+                .await()
+                .documents
+                .map { it.reference }
+            val skipped = firestore.runTransaction { transaction ->
+                if (transaction.get(scheduleRef).editVersion() != editVersion) {
+                    return@runTransaction null
+                }
+                val stillPending = pendingRefs.filter {
+                    transaction.get(it).getString("status") == DoseStatus.PENDING.name
+                }
+                stillPending.forEach { transaction.update(it, "status", DoseStatus.SKIPPED.name) }
+                transaction.update(
+                    scheduleRef,
+                    mapOf(
+                        "status" to ScheduleStatus.CLOSED.name,
+                        PendingDoseCounter.FIELD to 0,
+                        EDIT_VERSION_FIELD to editVersion + 1,
+                    ),
+                )
+                stillPending.map { it.id }
+            }.await()
+            if (skipped != null) return skipped
         }
-        batch.update(
-            schedulesCollection().document(scheduleId),
-            mapOf("status" to ScheduleStatus.CLOSED.name, PendingDoseCounter.FIELD to 0),
-        )
-        batch.commit().await()
+        error("La pauta $scheduleId cambió durante el cierre demasiadas veces")
     }
 
     override suspend fun getActiveSchedulesWithPendingDoses(): List<ScheduleWithDoses> {

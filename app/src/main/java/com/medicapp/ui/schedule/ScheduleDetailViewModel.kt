@@ -1,6 +1,7 @@
 package com.medicapp.ui.schedule
 
 import android.content.Context
+import android.util.Log
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -11,7 +12,6 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import com.medicapp.MedicApp
 import com.medicapp.data.repository.ScheduleRepository
 import com.medicapp.domain.DoseTaker
-import com.medicapp.model.DoseStatus
 import com.medicapp.model.MedicationDose
 import com.medicapp.model.MedicationSchedule
 import com.medicapp.notifications.DoseAlarmScheduler
@@ -21,6 +21,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
 data class ScheduleDetailUiState(
@@ -58,12 +59,23 @@ class ScheduleDetailViewModel(
         }
     }
 
+    /**
+     * Las alarmas se quitan de las tomas que el cierre pasó a omitidas, no de las que se veían en
+     * pantalla: una reposición pudo crear otra justo antes. Sin conexión el cierre falla y la
+     * pauta y sus alarmas quedan como estaban.
+     */
     fun closeSchedule(context: Context) {
+        val appContext = context.applicationContext
         viewModelScope.launch {
-            _uiState.value.doses.filter { it.status == DoseStatus.PENDING }.forEach { dose ->
-                DoseAlarmScheduler.cancelDose(context.applicationContext, scheduleId, dose.id)
+            val skipped = try {
+                scheduleRepository.closeSchedule(scheduleId)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.w("ScheduleDetailViewModel", "Could not close schedule", e)
+                return@launch
             }
-            scheduleRepository.closeSchedule(scheduleId)
+            skipped.forEach { DoseAlarmScheduler.cancelDose(appContext, scheduleId, it) }
         }
     }
 

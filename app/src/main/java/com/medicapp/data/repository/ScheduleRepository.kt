@@ -104,7 +104,11 @@ interface ScheduleRepository {
 
     suspend fun getPendingDoses(scheduleId: String): List<MedicationDose>
 
-    suspend fun closeSchedule(scheduleId: String)
+    /**
+     * Cierra la pauta y pasa a omitidas sus tomas pendientes. Devuelve los ids de esas tomas
+     * para quitarles la alarma: pueden incluir alguna que una reposición creó mientras tanto.
+     */
+    suspend fun closeSchedule(scheduleId: String): List<String>
 
     suspend fun getActiveSchedulesWithPendingDoses(): List<ScheduleWithDoses>
 }
