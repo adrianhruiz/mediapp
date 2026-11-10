@@ -24,6 +24,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.medicapp.domain.DoseInterval
 import com.medicapp.model.MedicationSchedule
 import com.medicapp.model.ScheduleStatus
 import com.medicapp.ui.components.BlisterCell
@@ -117,7 +118,7 @@ private fun ScheduleCard(schedule: MedicationSchedule, onClick: () -> Unit, onCl
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(MedicationNames.split(schedule.nombreMedicamento).first, style = MaterialTheme.typography.titleMedium)
                 Text(
-                    "Cada ${schedule.intervalHours} h · ${schedule.totalDoses} tomas",
+                    "${DoseInterval.label(schedule.intervalHours)} · ${schedule.totalDoses} tomas",
                     style = MaterialTheme.typography.bodySmall.copy(fontFamily = DmMono),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

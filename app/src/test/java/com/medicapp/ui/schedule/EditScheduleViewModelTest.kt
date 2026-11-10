@@ -6,6 +6,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.test.core.app.ApplicationProvider
 import com.medicapp.data.repository.FakeReasonRepository
 import com.medicapp.data.repository.FakeScheduleRepository
+import com.medicapp.domain.DoseInterval
 import com.medicapp.model.DoseStatus
 import com.medicapp.notifications.DoseAlarmScheduler
 import kotlinx.coroutines.Dispatchers
@@ -92,7 +93,8 @@ class EditScheduleViewModelTest {
         val state = viewModel.uiState.value
         assertTrue(state.isEditing)
         assertEquals("Ibuprofeno", state.nombreMedicamento)
-        assertEquals("8", state.intervalHoursInput)
+        assertEquals("8", state.intervalAmountInput)
+        assertEquals(DoseInterval.Unit.HOURS, state.intervalUnit)
         assertEquals("4", state.totalDosesInput)
         assertEquals("Dolor", state.reasonInput)
         assertEquals(1, state.keptDoseCount)
@@ -102,12 +104,33 @@ class EditScheduleViewModelTest {
     }
 
     @Test
+    fun `editing a weekly schedule loads the interval as 1 week`() = runTest(dispatcher) {
+        val created = scheduleRepository.createSchedule(
+            nregistro = "2",
+            nombreMedicamento = "Vitamina D",
+            fotoUrl = null,
+            intervalHours = 168,
+            totalDoses = 4,
+            startAtMillis = start,
+            reasonId = "r2",
+            reasonNombre = "Déficit",
+        )
+        val viewModel = editViewModel(created.schedule.id)
+
+        val state = viewModel.uiState.value
+        assertEquals("1", state.intervalAmountInput)
+        assertEquals(DoseInterval.Unit.WEEKS, state.intervalUnit)
+        assertEquals(168, state.intervalHours)
+    }
+
+    @Test
     fun `saving an edit regenerates pending doses and moves their alarms`() = runTest(dispatcher) {
         val scheduleId = scheduleWithFirstDoseTaken()
         val viewModel = editViewModel(scheduleId)
         val next = now + hour
 
-        viewModel.onIntervalHoursChanged("12")
+        viewModel.onIntervalAmountChanged("12")
+        viewModel.onIntervalUnitChanged(DoseInterval.Unit.HOURS)
         viewModel.onTotalDosesChanged("3")
         viewModel.onStartAtChanged(next)
         viewModel.onReasonInputChanged("Fiebre")
@@ -149,7 +172,8 @@ class EditScheduleViewModelTest {
         )
         advanceUntilIdle()
 
-        viewModel.onIntervalHoursChanged("12")
+        viewModel.onIntervalAmountChanged("12")
+        viewModel.onIntervalUnitChanged(DoseInterval.Unit.HOURS)
         viewModel.onTotalDosesChanged("2")
         viewModel.onStartAtChanged(now)
         viewModel.onReasonInputChanged("Dolor")
