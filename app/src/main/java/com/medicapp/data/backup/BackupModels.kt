@@ -1,5 +1,7 @@
 package com.medicapp.data.backup
 
+import com.medicapp.data.repository.FirestoreScheduleRepository
+import com.medicapp.domain.DoseScheduleCalculator
 import kotlinx.serialization.Serializable
 
 /** Sube si el formato deja de poder leerse con el código de una versión anterior. */
@@ -76,6 +78,22 @@ data class BackupSchedule(
     val status: String,
     val createdAtMillis: Long? = null,
     val doses: List<BackupDose> = emptyList(),
+    /** Pauta sin fin. Las copias anteriores no lo traen y se restauran como pautas con total. */
+    val openEnded: Boolean = false,
+)
+
+/**
+ * Por dónde va la pauta al restaurarla. Una pauta editada no acaba donde dice la fórmula, y una
+ * sin fin no tiene fórmula: en las dos manda la última de sus tomas. Una sin fin necesita
+ * además el número de esa toma para seguir numerando las que repone.
+ */
+fun BackupSchedule.progressFields(): Map<String, Any> = mapOf(
+    FirestoreScheduleRepository.END_AT_FIELD to (
+        doses.maxOfOrNull { it.scheduledAtMillis }
+            ?: DoseScheduleCalculator.endAtMillis(startAtMillis, intervalHours, totalDoses)
+        ),
+    FirestoreScheduleRepository.OPEN_ENDED_FIELD to openEnded,
+    FirestoreScheduleRepository.LAST_DOSE_NUMBER_FIELD to (doses.maxOfOrNull { it.doseNumber } ?: 0),
 )
 
 @Serializable
