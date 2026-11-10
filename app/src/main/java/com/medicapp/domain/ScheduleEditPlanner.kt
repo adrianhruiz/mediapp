@@ -44,6 +44,29 @@ object ScheduleEditPlanner {
         if (remaining < 1) return null
 
         val newTimes = DoseScheduleCalculator.computeDoseTimes(nextDoseAtMillis, intervalHours, remaining)
+        return planTimeline(kept, newTimes)
+    }
+
+    /**
+     * Igual que [plan], pero para una pauta sin fin: no hay total, así que las tomas nuevas son
+     * la ventana de los próximos días desde [nextDoseAtMillis]
+     * (ver [DoseScheduleCalculator.openEndedWindow]). Sirve también para pasar una pauta de
+     * total fijo a sin fin. Devuelve null si el intervalo no es válido.
+     */
+    fun planOpenEnded(
+        doses: List<MedicationDose>,
+        intervalHours: Int,
+        nextDoseAtMillis: Long,
+        nowMillis: Long,
+    ): ScheduleEditPlan? {
+        if (intervalHours < 1) return null
+        val kept = doses.filter { it.status != DoseStatus.PENDING }
+        val newTimes = DoseScheduleCalculator.openEndedWindow(nextDoseAtMillis, intervalHours, nowMillis)
+        return planTimeline(kept, newTimes)
+    }
+
+    /** Mezcla las tomas conservadas con las nuevas por hora y las numera de nuevo. */
+    private fun planTimeline(kept: List<MedicationDose>, newTimes: List<Long>): ScheduleEditPlan {
         // Las conservadas van delante: a igual hora, la ya hecha cuenta primero.
         val timeline = (kept.map { it.scheduledAtMillis to it } + newTimes.map { it to null })
             .sortedBy { it.first }

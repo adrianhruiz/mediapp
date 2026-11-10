@@ -111,19 +111,17 @@ class FakeScheduleRepository : ScheduleRepository {
         startAtMillis: Long,
         reasonId: String,
         reasonNombre: String,
+        openEnded: Boolean,
+        nowMillis: Long,
     ): ScheduleWithDoses {
         val scheduleId = "schedule-${nextScheduleId++}"
-        val doseTimes = DoseScheduleCalculator.computeDoseTimes(startAtMillis, intervalHours, totalDoses)
+        val doseTimes = if (openEnded) {
+            DoseScheduleCalculator.openEndedWindow(startAtMillis, intervalHours, nowMillis)
+        } else {
+            DoseScheduleCalculator.computeDoseTimes(startAtMillis, intervalHours, totalDoses)
+        }
         val doses = doseTimes.mapIndexed { index, scheduledAtMillis ->
-            MedicationDose(
-                id = "dose-${nextDoseId++}",
-                scheduleId = scheduleId,
-                doseNumber = index + 1,
-                scheduledAtMillis = scheduledAtMillis,
-                status = DoseStatus.PENDING,
-                takenAtMillis = null,
-                historyEntryId = null,
-            )
+            newDose(scheduleId, index + 1, scheduledAtMillis)
         }
         val schedule = MedicationSchedule(
             id = scheduleId,
@@ -131,16 +129,28 @@ class FakeScheduleRepository : ScheduleRepository {
             nombreMedicamento = nombreMedicamento,
             fotoUrl = fotoUrl,
             intervalHours = intervalHours,
-            totalDoses = totalDoses,
+            totalDoses = if (openEnded) 0 else totalDoses,
             startAtMillis = startAtMillis,
             reasonId = reasonId,
             reasonNombre = reasonNombre,
             status = ScheduleStatus.ACTIVE,
+            openEnded = openEnded,
         )
+        if (openEnded) editedEndAt[scheduleId] = doseTimes.last()
         schedulesFlow.value = schedulesFlow.value + schedule
         dosesFlow(scheduleId).value = doses
         return ScheduleWithDoses(schedule, doses)
     }
+
+    private fun newDose(scheduleId: String, doseNumber: Int, scheduledAtMillis: Long) = MedicationDose(
+        id = "dose-${nextDoseId++}",
+        scheduleId = scheduleId,
+        doseNumber = doseNumber,
+        scheduledAtMillis = scheduledAtMillis,
+        status = DoseStatus.PENDING,
+        takenAtMillis = null,
+        historyEntryId = null,
+    )
 
     override suspend fun updateSchedule(
         scheduleId: String,
@@ -149,29 +159,26 @@ class FakeScheduleRepository : ScheduleRepository {
         nextDoseAtMillis: Long,
         reasonId: String,
         reasonNombre: String,
+        openEnded: Boolean,
+        nowMillis: Long,
     ): ScheduleEditResult? {
         val schedule = getSchedule(scheduleId)?.takeIf { it.status == ScheduleStatus.ACTIVE } ?: return null
         val doses = dosesFlow(scheduleId).value
-        val plan = ScheduleEditPlanner.plan(doses, intervalHours, totalDoses, nextDoseAtMillis) ?: return null
+        val plan = if (openEnded) {
+            ScheduleEditPlanner.planOpenEnded(doses, intervalHours, nextDoseAtMillis, nowMillis)
+        } else {
+            ScheduleEditPlanner.plan(doses, intervalHours, totalDoses, nextDoseAtMillis)
+        } ?: return null
 
         val removed = doses.filter { it.status == DoseStatus.PENDING }
         val kept = (doses - removed.toSet()).map { dose ->
             plan.renumberedKeptDoses[dose.id]?.let { dose.copy(doseNumber = it) } ?: dose
         }
-        val newDoses = plan.newDoses.map { planned ->
-            MedicationDose(
-                id = "dose-${nextDoseId++}",
-                scheduleId = scheduleId,
-                doseNumber = planned.doseNumber,
-                scheduledAtMillis = planned.scheduledAtMillis,
-                status = DoseStatus.PENDING,
-                takenAtMillis = null,
-                historyEntryId = null,
-            )
-        }
+        val newDoses = plan.newDoses.map { planned -> newDose(scheduleId, planned.doseNumber, planned.scheduledAtMillis) }
         val updated = schedule.copy(
             intervalHours = intervalHours,
-            totalDoses = totalDoses,
+            totalDoses = if (openEnded) 0 else totalDoses,
+            openEnded = openEnded,
             startAtMillis = plan.startAtMillis,
             reasonId = reasonId,
             reasonNombre = reasonNombre,
@@ -191,9 +198,28 @@ class FakeScheduleRepository : ScheduleRepository {
             }
         }
         dosesFlow(scheduleId).value = updated
-        if (updated.none { it.status == DoseStatus.PENDING }) {
+        val openEnded = getSchedule(scheduleId)?.openEnded == true
+        if (!openEnded && updated.none { it.status == DoseStatus.PENDING }) {
             closeScheduleStatusOnly(scheduleId)
         }
+    }
+
+    override suspend fun replenishOpenEndedDoses(scheduleId: String, nowMillis: Long): List<MedicationDose> {
+        val schedule = getSchedule(scheduleId)
+            ?.takeIf { it.openEnded && it.status == ScheduleStatus.ACTIVE } ?: return emptyList()
+        val doses = dosesFlow(scheduleId).value
+        val last = doses.maxByOrNull { it.scheduledAtMillis } ?: return emptyList()
+        var number = doses.maxOf { it.doseNumber }
+        val added = DoseScheduleCalculator.openEndedReplenish(last.scheduledAtMillis, schedule.intervalHours, nowMillis)
+            .map { newDose(scheduleId, ++number, it) }
+        if (added.isEmpty()) return emptyList()
+        editedEndAt[scheduleId] = added.last().scheduledAtMillis
+        dosesFlow(scheduleId).value = doses + added
+        return added
+    }
+
+    override suspend fun replenishOpenEndedSchedules(nowMillis: Long) {
+        schedulesFlow.value.filter { it.openEnded }.forEach { replenishOpenEndedDoses(it.id, nowMillis) }
     }
 
     override suspend fun getPendingDoses(scheduleId: String): List<MedicationDose> =
