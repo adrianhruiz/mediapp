@@ -43,6 +43,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.medicapp.ui.components.GelButton
+import com.medicapp.domain.DoseInterval
 import com.medicapp.domain.DoseScheduleCalculator
 import com.medicapp.model.Reason
 import com.medicapp.notifications.DoseAlarmScheduler
@@ -60,7 +61,7 @@ import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun CreateScheduleScreen(
     onDone: () -> Unit,
@@ -116,26 +117,44 @@ fun CreateScheduleScreen(
         }
 
         Text("Frecuencia", style = MaterialTheme.typography.titleMedium)
-        Row(
+        FlowRow(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             modifier = Modifier.padding(top = 8.dp),
         ) {
-            listOf(8 to "Cada 8h", 12 to "Cada 12h", 24 to "Cada 24h").forEach { (hours, label) ->
+            DoseInterval.presets.forEach { hours ->
                 FilterChip(
-                    selected = uiState.intervalHoursInput == hours.toString(),
+                    selected = uiState.intervalHours == hours,
                     onClick = { viewModel.onIntervalPresetSelected(hours) },
+                    label = { Text(DoseInterval.label(hours)) },
+                )
+            }
+        }
+        // Campo libre: cantidad + unidad, para frecuencias que no están entre los chips.
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+        ) {
+            OutlinedTextField(
+                value = uiState.intervalAmountInput,
+                onValueChange = viewModel::onIntervalAmountChanged,
+                label = { Text("Cada") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                modifier = Modifier.weight(1f),
+                singleLine = true,
+            )
+            listOf(
+                DoseInterval.Unit.HOURS to "horas",
+                DoseInterval.Unit.DAYS to "días",
+                DoseInterval.Unit.WEEKS to "semanas",
+            ).forEach { (unit, label) ->
+                FilterChip(
+                    selected = uiState.intervalUnit == unit,
+                    onClick = { viewModel.onIntervalUnitChanged(unit) },
                     label = { Text(label) },
                 )
             }
         }
-        OutlinedTextField(
-            value = uiState.intervalHoursInput,
-            onValueChange = viewModel::onIntervalHoursChanged,
-            label = { Text("Horas entre tomas") },
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-            singleLine = true,
-        )
 
         OutlinedTextField(
             value = uiState.totalDosesInput,
@@ -204,7 +223,7 @@ fun CreateScheduleScreen(
         GelButton(
             onClick = { viewModel.save(context) },
             enabled = uiState.reasonInput.isNotBlank() &&
-                uiState.intervalHoursInput.isNotBlank() &&
+                uiState.intervalHours != null &&
                 uiState.totalDosesInput.isNotBlank() &&
                 !uiState.hasDuplicateActiveSchedule,
             modifier = Modifier.fillMaxWidth().padding(top = 24.dp),
@@ -284,7 +303,7 @@ private const val MAX_PREVIEW_CELLS = 6
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun FirstDayPreview(uiState: CreateScheduleUiState) {
-    val interval = uiState.intervalHoursInput.toIntOrNull()?.takeIf { it > 0 } ?: return
+    val interval = uiState.intervalHours ?: return
     // Al editar solo se crean las tomas que faltan; las hechas se quedan como están.
     val total = uiState.totalDosesInput.toIntOrNull()
         ?.minus(uiState.keptDoseCount)
@@ -293,7 +312,13 @@ private fun FirstDayPreview(uiState: CreateScheduleUiState) {
     val firstDay = times.takeWhile { it < uiState.startAtMillis + 24 * 3_600_000L }.take(MAX_PREVIEW_CELLS)
     val pill = PillStyles.forMedication(uiState.nregistro, uiState.nombreMedicamento)
 
-    Eyebrow(if (uiState.isEditing) "Próximas 24 h" else "Primer día", modifier = Modifier.padding(top = 24.dp, bottom = 8.dp))
+    // Con un día o más entre tomas solo cae una en 24 h: "Primer día" ya no describe la tarjeta.
+    val eyebrow = when {
+        interval >= 24 -> "Primeras tomas"
+        uiState.isEditing -> "Próximas 24 h"
+        else -> "Primer día"
+    }
+    Eyebrow(eyebrow, modifier = Modifier.padding(top = 24.dp, bottom = 8.dp))
     FoilCard(modifier = Modifier.fillMaxWidth()) {
         FlowRow(
             modifier = Modifier.fillMaxWidth(),

@@ -11,6 +11,7 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import com.medicapp.MedicApp
 import com.medicapp.data.repository.ReasonRepository
 import com.medicapp.data.repository.ScheduleRepository
+import com.medicapp.domain.DoseInterval
 import com.medicapp.domain.ScheduleEditPlanner
 import com.medicapp.model.DoseStatus
 import com.medicapp.model.Reason
@@ -25,7 +26,9 @@ import kotlinx.coroutines.launch
 data class CreateScheduleUiState(
     val nregistro: String = "",
     val nombreMedicamento: String = "",
-    val intervalHoursInput: String = "24",
+    /** Cantidad del intervalo tal y como se teclea; con [intervalUnit] se convierte a horas. */
+    val intervalAmountInput: String = "1",
+    val intervalUnit: DoseInterval.Unit = DoseInterval.Unit.DAYS,
     val totalDosesInput: String = "1",
     val reasonInput: String = "",
     val suggestions: List<Reason> = emptyList(),
@@ -41,7 +44,13 @@ data class CreateScheduleUiState(
     val totalBelowTaken: Boolean = false,
     /** La edición no se pudo guardar (sin conexión o la pauta ya no está activa). */
     val saveFailed: Boolean = false,
-)
+) {
+    /** Intervalo en horas que se guardaría, o null si la cantidad está vacía, es cero o desborda. */
+    val intervalHours: Int?
+        get() = intervalAmountInput.toIntOrNull()
+            ?.takeIf { it > 0 }
+            ?.let { DoseInterval.toHours(it, intervalUnit) }
+}
 
 private const val MAX_SUGGESTIONS = 5
 
@@ -108,11 +117,13 @@ class CreateScheduleViewModel(
             .filter { it.status == DoseStatus.PENDING && it.scheduledAtMillis >= currentTime }
             .minOfOrNull { it.scheduledAtMillis } ?: currentTime
         loadedReason = schedule.reasonNombre
+        val (intervalAmount, intervalUnit) = DoseInterval.split(schedule.intervalHours)
         _uiState.update {
             it.copy(
                 nregistro = schedule.nregistro,
                 nombreMedicamento = schedule.nombreMedicamento,
-                intervalHoursInput = schedule.intervalHours.toString(),
+                intervalAmountInput = intervalAmount.toString(),
+                intervalUnit = intervalUnit,
                 totalDosesInput = schedule.totalDoses.toString(),
                 reasonInput = schedule.reasonNombre,
                 startAtMillis = nextDoseAt,
@@ -135,13 +146,18 @@ class CreateScheduleViewModel(
     }
 
     fun onIntervalPresetSelected(hours: Int) {
-        _uiState.update { it.copy(intervalHoursInput = hours.toString()) }
+        val (amount, unit) = DoseInterval.split(hours)
+        _uiState.update { it.copy(intervalAmountInput = amount.toString(), intervalUnit = unit) }
     }
 
-    fun onIntervalHoursChanged(value: String) {
+    fun onIntervalAmountChanged(value: String) {
         if (value.isEmpty() || value.all { it.isDigit() }) {
-            _uiState.update { it.copy(intervalHoursInput = value) }
+            _uiState.update { it.copy(intervalAmountInput = value) }
         }
+    }
+
+    fun onIntervalUnitChanged(unit: DoseInterval.Unit) {
+        _uiState.update { it.copy(intervalUnit = unit) }
     }
 
     fun onTotalDosesChanged(value: String) {
@@ -169,9 +185,9 @@ class CreateScheduleViewModel(
 
     fun save(context: Context) {
         val state = _uiState.value
-        val intervalHours = state.intervalHoursInput.toIntOrNull() ?: return
+        val intervalHours = state.intervalHours ?: return
         val totalDoses = state.totalDosesInput.toIntOrNull() ?: return
-        if (intervalHours < 1 || totalDoses < 1 || state.reasonInput.isBlank()) return
+        if (totalDoses < 1 || state.reasonInput.isBlank()) return
         if (state.hasDuplicateActiveSchedule) return
         if (totalDoses <= state.keptDoseCount) {
             _uiState.update { it.copy(totalBelowTaken = true) }
