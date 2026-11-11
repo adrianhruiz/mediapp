@@ -8,10 +8,12 @@ import com.google.firebase.firestore.MetadataChanges
 import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.SetOptions
 import com.google.firebase.firestore.WriteBatch
+import com.medicapp.model.SavedMedication
 import com.medicapp.model.TakenEntry
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import java.util.concurrent.atomic.AtomicBoolean
@@ -83,39 +85,55 @@ class FirestoreMedicationHistoryRepository(
      * Sale del resumen, no del historial: una lectura en vez de una por entrada guardada.
      *
      * Si el resumen todavía no existe —cuenta anterior a este cambio, o restauración de una
-     * copia— se rehace una sola vez leyendo el historial completo, que es justo lo que antes se
-     * hacía en cada consulta.
+     * copia— o es de antes de guardar nombres y fotos, se rehace una sola vez leyendo el historial
+     * completo, que es justo lo que antes se hacía en cada consulta.
      */
-    override fun getMedicationNregistros(): Flow<Set<String>> = callbackFlow {
-        val registration = summaryDocument().addSnapshotListener { snapshot, error ->
+    override fun getMedicationNregistros(): Flow<List<SavedMedication>> = callbackFlow {
+        val gate = HistorySummary.RebuildGate()
+        // Con metadatos: un resumen viejo que llega de la caché solo se rehace cuando el servidor
+        // lo confirma, y esa confirmación trae los mismos datos, así que sin INCLUDE no llegaría.
+        val registration = summaryDocument().addSnapshotListener(MetadataChanges.INCLUDE) { snapshot, error ->
             if (error != null) {
                 Log.w("MedicationHistoryRepository", "Medication summary listener failed", error)
-                trySend(emptySet())
+                trySend(emptyList())
                 return@addSnapshotListener
             }
             @Suppress("UNCHECKED_CAST")
             val counts = snapshot?.get(HistorySummary.NREGISTROS_FIELD) as? Map<String, Any?>
-            trySend(HistorySummary.nregistrosWithEntries(counts))
+            @Suppress("UNCHECKED_CAST")
+            val medicamentos = snapshot?.get(HistorySummary.MEDICAMENTOS_FIELD) as? Map<String, Any?>
+            trySend(HistorySummary.savedMedications(counts, medicamentos))
 
-            // Sin respuesta del servidor no sabemos si el resumen falta o es que aún no ha
-            // llegado; rehacerlo con esa duda escribiría un resumen a medias.
-            val missing = snapshot?.exists() != true && snapshot?.metadata?.isFromCache == false
-            if (missing) launch { rebuildSummary() }
+            val rebuild = gate.shouldRebuild(
+                exists = snapshot?.exists() == true,
+                fromServer = snapshot?.metadata?.isFromCache == false,
+                counts = counts,
+                medicamentos = medicamentos,
+            )
+            if (rebuild) launch { if (!rebuildSummary()) gate.onRebuildFailed() }
         }
         awaitClose { registration.remove() }
     }
+        // Los avisos que solo cambian metadatos traen la misma lista: no se reemiten.
+        .distinctUntilChanged()
 
-    private suspend fun rebuildSummary() {
-        if (!rebuildingSummary.compareAndSet(false, true)) return
-        try {
-            val nregistros = collection().get().await().documents.mapNotNull { it.getString("nregistro") }
-            summaryDocument()
-                .set(mapOf(HistorySummary.NREGISTROS_FIELD to HistorySummary.countByNregistro(nregistros)))
-                .await()
+    /** Devuelve si el resumen quedó rehecho; si otro listener ya lo estaba rehaciendo, también. */
+    private suspend fun rebuildSummary(): Boolean {
+        if (!rebuildingSummary.compareAndSet(false, true)) return true
+        return try {
+            val entries = collection().get().await().documents.mapNotNull { doc ->
+                val nregistro = doc.getString("nregistro") ?: return@mapNotNull null
+                // Sin nombre se usa el número de registro: así todos los contados tienen uno y el
+                // resumen no vuelve a pedir que se rehaga.
+                SavedMedication(nregistro, doc.getString("nombreMedicamento") ?: nregistro, doc.getString("fotoUrl"))
+            }
+            summaryDocument().set(HistorySummary.rebuild(entries)).await()
+            true
         } catch (e: Exception) {
-            // Si falla, el resumen sigue sin existir y volverá a intentarse; mientras tanto la
-            // búsqueda solo pierde los distintivos de "ya en tu historial".
+            // Si falla, el resumen sigue sin rehacer y volverá a intentarse con el siguiente aviso
+            // del servidor; mientras tanto los guardados del historial no salen en la búsqueda.
             Log.w("MedicationHistoryRepository", "No se pudo rehacer el resumen del historial", e)
+            false
         } finally {
             rebuildingSummary.set(false)
         }
@@ -158,7 +176,7 @@ class FirestoreMedicationHistoryRepository(
                 "timestamp" to FieldValue.serverTimestamp(),
             ),
         )
-        batch.summaryChange(nregistro, by = 1)
+        batch.summaryChange(nregistro, by = 1, info = HistorySummary.medicationInfo(nombreMedicamento, fotoUrl))
         batch.commit().await()
         return ref.id
     }
@@ -176,12 +194,16 @@ class FirestoreMedicationHistoryRepository(
         batch.commit().await()
     }
 
-    private fun WriteBatch.summaryChange(nregistro: String, by: Long) {
-        set(
-            summaryDocument(),
-            mapOf(HistorySummary.NREGISTROS_FIELD to mapOf(nregistro to FieldValue.increment(by))),
-            SetOptions.merge(),
-        )
+    /**
+     * Al añadir se escribe también nombre y foto ([info]); al borrar no se tocan, porque si el
+     * contador baja a cero el medicamento ya deja de salir.
+     */
+    private fun WriteBatch.summaryChange(nregistro: String, by: Long, info: Map<String, Any?>? = null) {
+        val change = buildMap<String, Any> {
+            put(HistorySummary.NREGISTROS_FIELD, mapOf(nregistro to FieldValue.increment(by)))
+            if (info != null) put(HistorySummary.MEDICAMENTOS_FIELD, mapOf(nregistro to info))
+        }
+        set(summaryDocument(), change, SetOptions.merge())
     }
 }
 

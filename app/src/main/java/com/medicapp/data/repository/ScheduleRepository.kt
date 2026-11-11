@@ -2,6 +2,7 @@ package com.medicapp.data.repository
 
 import com.medicapp.model.MedicationDose
 import com.medicapp.model.MedicationSchedule
+import com.medicapp.model.SavedMedication
 import kotlinx.coroutines.flow.Flow
 
 data class ScheduleWithDoses(val schedule: MedicationSchedule, val doses: List<MedicationDose>)
@@ -34,8 +35,11 @@ interface ScheduleRepository {
 
     fun getSchedulesPage(limit: Long): Flow<PagedResult<MedicationSchedule>>
 
-    /** Números de registro con pauta activa, para marcarlos como guardados en la búsqueda. */
-    fun getActiveScheduleNregistros(): Flow<Set<String>>
+    /**
+     * Medicamentos con pauta activa, uno por número de registro, con su nombre y su foto: para
+     * marcarlos como guardados y para encontrarlos en la búsqueda sin pasar por CIMA.
+     */
+    fun getActiveScheduleNregistros(): Flow<List<SavedMedication>>
 
     fun getDoses(scheduleId: String): Flow<List<MedicationDose>>
 

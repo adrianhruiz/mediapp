@@ -12,6 +12,7 @@ import com.medicapp.domain.ScheduleEditPlanner
 import com.medicapp.model.DoseStatus
 import com.medicapp.model.MedicationDose
 import com.medicapp.model.MedicationSchedule
+import com.medicapp.model.SavedMedication
 import com.medicapp.model.ScheduleStatus
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.channels.awaitClose
@@ -223,16 +224,21 @@ class FirestoreScheduleRepository(
         awaitClose { registration.remove() }
     }
 
-    override fun getActiveScheduleNregistros(): Flow<Set<String>> = callbackFlow {
+    /** Los documentos de pauta ya traen nombre y foto: no hace falta leer nada más. */
+    override fun getActiveScheduleNregistros(): Flow<List<SavedMedication>> = callbackFlow {
         val registration = schedulesCollection()
             .whereEqualTo("status", ScheduleStatus.ACTIVE.name)
             .addSnapshotListener { snapshot, error ->
                 if (error != null) {
                     Log.w("ScheduleRepository", "Active schedules listener failed", error)
-                    trySend(emptySet())
+                    trySend(emptyList())
                     return@addSnapshotListener
                 }
-                trySend(snapshot?.documents.orEmpty().mapNotNull { it.getString("nregistro") }.toSet())
+                val saved = snapshot?.documents.orEmpty().mapNotNull { doc ->
+                    val nregistro = doc.getString("nregistro") ?: return@mapNotNull null
+                    SavedMedication(nregistro, doc.getString("nombreMedicamento") ?: nregistro, doc.getString("fotoUrl"))
+                }
+                trySend(saved.distinctBy { it.nregistro })
             }
         awaitClose { registration.remove() }
     }

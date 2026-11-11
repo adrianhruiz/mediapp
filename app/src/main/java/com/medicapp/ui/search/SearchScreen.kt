@@ -41,11 +41,13 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.medicapp.model.CustomMedication
 import com.medicapp.model.Medication
+import com.medicapp.model.SavedMedication
 import com.medicapp.ui.components.MedicationNames
 import com.medicapp.ui.components.MedicationThumbnail
 import com.medicapp.ui.components.ScreenHeader
 import com.medicapp.ui.components.SearchHelpButton
 import com.medicapp.ui.components.StatusSeal
+import com.medicapp.ui.search.SavedMedicationSearch.toMedication
 import com.medicapp.ui.theme.DmMono
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -61,6 +63,7 @@ fun SearchScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val savedNregistros by viewModel.savedNregistros.collectAsStateWithLifecycle()
     val historyNregistros by viewModel.historyNregistros.collectAsStateWithLifecycle()
+    val savedResults by viewModel.savedResults.collectAsStateWithLifecycle()
     var customDraft by rememberSaveable { mutableStateOf<String?>(null) }
 
     customDraft?.let { draft ->
@@ -78,6 +81,12 @@ fun SearchScreen(
         )
     }
     val openCustomDraft = { customDraft = query.trim() }
+    val openSaved = { saved: SavedMedication ->
+        when (val selection = SavedMedicationSearch.selectionFor(saved)) {
+            is SavedSelection.Detail -> onOpenDetail(selection.medication)
+            is SavedSelection.Custom -> customDraft = selection.nombre
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -106,51 +115,112 @@ fun SearchScreen(
 
         androidx.compose.foundation.layout.Spacer(modifier = Modifier.padding(top = 8.dp))
 
-        when (val state = uiState) {
-            is SearchUiState.Idle -> HintMessage("Escribe el nombre de un medicamento para buscar")
-            is SearchUiState.Loading -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        val state = uiState
+        when {
+            state is SearchUiState.Idle -> HintMessage("Escribe el nombre de un medicamento para buscar")
+            // Con guardados que coinciden, se ven ya y lo de CIMA (cargando, vacío o error) va debajo.
+            state is SearchUiState.Success || savedResults.isNotEmpty() -> SearchResults(
+                state = state,
+                saved = savedResults,
+                query = query,
+                savedNregistros = savedNregistros,
+                historyNregistros = historyNregistros,
+                onOpenSaved = openSaved,
+                onOpenDetail = onOpenDetail,
+                onOpenCustomDraft = openCustomDraft,
+            )
+            state is SearchUiState.Loading -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator()
             }
-            is SearchUiState.Empty -> {
+            state is SearchUiState.Empty -> {
                 CustomMedicationCard(query = query, onClick = openCustomDraft)
                 HintMessage("No se han encontrado medicamentos")
             }
-            is SearchUiState.Error -> {
+            state is SearchUiState.Error -> {
                 CustomMedicationCard(query = query, onClick = openCustomDraft)
                 HintMessage(state.message)
             }
-            is SearchUiState.Success -> {
-                if (state.isFromCache) {
-                    Text(
-                        "Sin acceso al buscador · mostrando resultados guardados",
-                        style = MaterialTheme.typography.bodySmall,
-                        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
-                    )
-                }
-                LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    if (state.totalFilas > state.results.size) {
-                        item {
-                            Text(
-                                "Mostrando ${state.results.size} de ${state.totalFilas} resultados. Refina la búsqueda para más precisión.",
-                                modifier = Modifier.padding(vertical = 4.dp),
-                            )
-                        }
-                    }
-                    items(state.results, key = { it.nregistro }) { medication ->
-                        MedicationResultCard(
-                            medication = medication,
-                            isSaved = medication.nregistro in savedNregistros,
-                            isInHistory = medication.nregistro in historyNregistros,
-                            onClick = { onOpenDetail(medication) },
-                        )
-                    }
-                    item(key = "custom") {
-                        CustomMedicationCard(query = query, onClick = openCustomDraft)
-                    }
-                }
-            }
         }
     }
+}
+
+/**
+ * Primero los medicamentos que el usuario ya tiene y después lo que devuelve CIMA, que ya llega
+ * sin los repetidos. Mientras CIMA carga, o si falla o no encuentra nada, se avisa debajo.
+ */
+@Composable
+private fun SearchResults(
+    state: SearchUiState,
+    saved: List<SavedMedication>,
+    query: String,
+    savedNregistros: Set<String>,
+    historyNregistros: Set<String>,
+    onOpenSaved: (SavedMedication) -> Unit,
+    onOpenDetail: (Medication) -> Unit,
+    onOpenCustomDraft: () -> Unit,
+) {
+    if (state is SearchUiState.Success && state.isFromCache) {
+        Text(
+            "Sin acceso al buscador · mostrando resultados guardados",
+            style = MaterialTheme.typography.bodySmall,
+            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+        )
+    }
+    LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        items(saved, key = { "saved-${it.nregistro}" }) { medication ->
+            MedicationResultCard(
+                medication = medication.toMedication(),
+                isSaved = medication.nregistro in savedNregistros,
+                isInHistory = medication.nregistro in historyNregistros,
+                onClick = { onOpenSaved(medication) },
+            )
+        }
+        when (state) {
+            is SearchUiState.Loading -> item(key = "loading") {
+                Box(modifier = Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator()
+                }
+            }
+            is SearchUiState.Empty -> item(key = "empty") {
+                CimaNotice("No se han encontrado más medicamentos en CIMA")
+            }
+            is SearchUiState.Error -> item(key = "error") { CimaNotice(state.message) }
+            is SearchUiState.Success -> {
+                if (state.totalFilas > state.results.size) {
+                    item {
+                        Text(
+                            "Mostrando ${state.results.size} de ${state.totalFilas} resultados. Refina la búsqueda para más precisión.",
+                            modifier = Modifier.padding(vertical = 4.dp),
+                        )
+                    }
+                }
+                items(state.results, key = { it.nregistro }) { medication ->
+                    MedicationResultCard(
+                        medication = medication,
+                        isSaved = medication.nregistro in savedNregistros,
+                        isInHistory = medication.nregistro in historyNregistros,
+                        onClick = { onOpenDetail(medication) },
+                    )
+                }
+            }
+            is SearchUiState.Idle -> Unit
+        }
+        item(key = "custom") {
+            CustomMedicationCard(query = query, onClick = onOpenCustomDraft)
+        }
+    }
+}
+
+/** El aviso de CIMA debajo de los guardados: sin ocupar la pantalla como cuando va solo. */
+@Composable
+private fun CimaNotice(text: String) {
+    Text(
+        text,
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        textAlign = TextAlign.Center,
+        modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
+    )
 }
 
 /** Salida para lo que CIMA no tiene: una pomada, un remedio sin registro... */

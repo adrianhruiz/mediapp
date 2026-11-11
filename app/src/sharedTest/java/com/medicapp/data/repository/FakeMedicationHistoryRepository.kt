@@ -1,5 +1,6 @@
 package com.medicapp.data.repository
 
+import com.medicapp.model.SavedMedication
 import com.medicapp.model.TakenEntry
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -28,8 +29,8 @@ class FakeMedicationHistoryRepository(
         entries.filter { it.nregistro == nregistro }
     }
 
-    override fun getMedicationNregistros(): Flow<Set<String>> = entriesFlow.map { entries ->
-        entries.map { it.nregistro }.toSet()
+    override fun getMedicationNregistros(): Flow<List<SavedMedication>> = entriesFlow.map { entries ->
+        entries.distinctBy { it.nregistro }.map { SavedMedication(it.nregistro, it.nombreMedicamento, it.fotoUrl) }
     }
 
     override suspend fun getById(id: String): TakenEntry? = entriesFlow.value.firstOrNull { it.id == id }

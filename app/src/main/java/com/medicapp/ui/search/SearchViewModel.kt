@@ -10,16 +10,20 @@ import com.medicapp.data.remote.CimaUnavailableException
 import com.medicapp.data.repository.MedicationHistoryRepository
 import com.medicapp.data.repository.MedicationSearchRepository
 import com.medicapp.data.repository.ScheduleRepository
+import com.medicapp.model.SavedMedication
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import java.io.IOException
 
@@ -32,18 +36,55 @@ class SearchViewModel(
     private val _query = MutableStateFlow("")
     val query: StateFlow<String> = _query.asStateFlow()
 
+    /**
+     * Cada lista se escucha una sola vez y de ella salen tanto los distintivos como los guardados
+     * de la búsqueda: dos `collect` del repositorio abrirían dos listeners de Firestore.
+     */
+    private val activeSchedules: StateFlow<List<SavedMedication>> = scheduleRepository.getActiveScheduleNregistros()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    private val historyMedications: StateFlow<List<SavedMedication>> = historyRepository.getMedicationNregistros()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     /** Medicamentos con un recordatorio activo. */
-    val savedNregistros: StateFlow<Set<String>> = scheduleRepository.getActiveScheduleNregistros()
+    val savedNregistros: StateFlow<Set<String>> = activeSchedules
+        .map { saved -> saved.mapTo(mutableSetOf()) { it.nregistro } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptySet())
 
     /** Medicamentos que ya están en el historial. */
-    val historyNregistros: StateFlow<Set<String>> = historyRepository.getMedicationNregistros()
+    val historyNregistros: StateFlow<Set<String>> = historyMedications
+        .map { saved -> saved.mapTo(mutableSetOf()) { it.nregistro } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptySet())
 
-    @OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
-    val uiState: StateFlow<SearchUiState> = _query
-        .debounce(350)
-        .distinctUntilChanged()
+    @OptIn(FlowPreview::class)
+    private val searchedText = _query.debounce(350).distinctUntilChanged()
+
+    /**
+     * Los medicamentos que el usuario ya tiene (pautas activas e historial, sin repetir) que
+     * coinciden con la búsqueda. Van antes que CIMA y no esperan a que responda: así un
+     * medicamento propio, que CIMA no conoce, vuelve a salir al buscarlo.
+     */
+    val savedResults: StateFlow<List<SavedMedication>> =
+        combine(searchedText, activeSchedules, historyMedications) { text, schedules, history ->
+            SavedMedicationSearch.filter((schedules + history).distinctBy { it.nregistro }, text)
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    /**
+     * El estado de la búsqueda en CIMA. Los resultados que ya salen en [savedResults] se quitan
+     * para no repetirlos; los estados de carga, vacío y error no cambian.
+     */
+    val uiState: StateFlow<SearchUiState> = combine(cimaState(), savedResults) { state, saved ->
+        if (state !is SearchUiState.Success || saved.isEmpty()) return@combine state
+        val shown = saved.mapTo(mutableSetOf()) { it.nregistro }
+        val remaining = state.results.filterNot { it.nregistro in shown }
+        state.copy(
+            results = remaining,
+            totalFilas = (state.totalFilas - (state.results.size - remaining.size)).coerceAtLeast(remaining.size),
+        )
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), SearchUiState.Idle)
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private fun cimaState(): Flow<SearchUiState> = searchedText
         .flatMapLatest { text ->
             flow {
                 if (text.isBlank()) {
@@ -78,7 +119,6 @@ class SearchViewModel(
                 }
             }
         }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), SearchUiState.Idle)
 
     fun onQueryChanged(newQuery: String) {
         _query.value = newQuery
