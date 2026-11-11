@@ -24,7 +24,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.medicapp.domain.DoseInterval
 import com.medicapp.model.MedicationSchedule
 import com.medicapp.model.ScheduleStatus
 import com.medicapp.ui.components.BlisterCell
@@ -118,7 +117,7 @@ private fun ScheduleCard(schedule: MedicationSchedule, onClick: () -> Unit, onCl
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(MedicationNames.split(schedule.nombreMedicamento).first, style = MaterialTheme.typography.titleMedium)
                 Text(
-                    "${DoseInterval.label(schedule.intervalHours)} · ${schedule.totalDoses} tomas",
+                    ScheduleTexts.listSummary(schedule),
                     style = MaterialTheme.typography.bodySmall.copy(fontFamily = DmMono),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -128,7 +127,7 @@ private fun ScheduleCard(schedule: MedicationSchedule, onClick: () -> Unit, onCl
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 if (onClose != null) {
-                    SecondaryButton(onClick = onClose, modifier = Modifier.padding(top = 8.dp)) { Text("Cerrar periodo") }
+                    SecondaryButton(onClick = onClose, modifier = Modifier.padding(top = 8.dp)) { Text(ScheduleTexts.closeLabel(schedule)) }
                 }
             }
         }

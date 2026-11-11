@@ -30,6 +30,8 @@ data class CreateScheduleUiState(
     val intervalAmountInput: String = "1",
     val intervalUnit: DoseInterval.Unit = DoseInterval.Unit.DAYS,
     val totalDosesInput: String = "1",
+    /** Pauta sin fin: no pide total y dura hasta que se cierre. */
+    val openEnded: Boolean = false,
     val reasonInput: String = "",
     val suggestions: List<Reason> = emptyList(),
     val startAtMillis: Long = System.currentTimeMillis(),
@@ -118,16 +120,23 @@ class CreateScheduleViewModel(
             .minOfOrNull { it.scheduledAtMillis } ?: currentTime
         loadedReason = schedule.reasonNombre
         val (intervalAmount, intervalUnit) = DoseInterval.split(schedule.intervalHours)
+        val keptDoseCount = ScheduleEditPlanner.keptDoseCount(doses)
         _uiState.update {
             it.copy(
                 nregistro = schedule.nregistro,
                 nombreMedicamento = schedule.nombreMedicamento,
                 intervalAmountInput = intervalAmount.toString(),
                 intervalUnit = intervalUnit,
-                totalDosesInput = schedule.totalDoses.toString(),
+                // Una sin fin no tiene total: si se pasa a total fijo, se propone el mínimo válido.
+                totalDosesInput = if (schedule.openEnded) {
+                    (keptDoseCount + 1).toString()
+                } else {
+                    schedule.totalDoses.toString()
+                },
+                openEnded = schedule.openEnded,
                 reasonInput = schedule.reasonNombre,
                 startAtMillis = nextDoseAt,
-                keptDoseCount = ScheduleEditPlanner.keptDoseCount(doses),
+                keptDoseCount = keptDoseCount,
             )
         }
         recomputeSuggestions()
@@ -166,6 +175,10 @@ class CreateScheduleViewModel(
         }
     }
 
+    fun onOpenEndedChanged(openEnded: Boolean) {
+        _uiState.update { it.copy(openEnded = openEnded, totalBelowTaken = false) }
+    }
+
     fun onReasonInputChanged(newValue: String) {
         _uiState.update { it.copy(reasonInput = newValue) }
         recomputeSuggestions()
@@ -186,12 +199,15 @@ class CreateScheduleViewModel(
     fun save(context: Context) {
         val state = _uiState.value
         val intervalHours = state.intervalHours ?: return
-        val totalDoses = state.totalDosesInput.toIntOrNull() ?: return
-        if (totalDoses < 1 || state.reasonInput.isBlank()) return
-        if (state.hasDuplicateActiveSchedule) return
-        if (totalDoses <= state.keptDoseCount) {
-            _uiState.update { it.copy(totalBelowTaken = true) }
-            return
+        if (state.reasonInput.isBlank() || state.hasDuplicateActiveSchedule) return
+        // Sin fin no hay total que validar: el repositorio lo guarda como 0.
+        val totalDoses = if (state.openEnded) 0 else state.totalDosesInput.toIntOrNull() ?: return
+        if (!state.openEnded) {
+            if (totalDoses < 1) return
+            if (totalDoses <= state.keptDoseCount) {
+                _uiState.update { it.copy(totalBelowTaken = true) }
+                return
+            }
         }
 
         if (!DoseAlarmScheduler.canScheduleExactAlarms(context)) {
@@ -220,6 +236,8 @@ class CreateScheduleViewModel(
                 startAtMillis = state.startAtMillis,
                 reasonId = reason.id,
                 reasonNombre = reason.nombre,
+                openEnded = state.openEnded,
+                nowMillis = now(),
             )
             result.doses.forEach { dose ->
                 DoseAlarmScheduler.scheduleDose(
@@ -250,6 +268,8 @@ class CreateScheduleViewModel(
                     nextDoseAtMillis = state.startAtMillis,
                     reasonId = reason.id,
                     reasonNombre = reason.nombre,
+                    openEnded = state.openEnded,
+                    nowMillis = now(),
                 )
             }.getOrNull()
             if (result == null) {
