@@ -9,8 +9,6 @@ import com.medicapp.MedicApp
 import com.medicapp.data.repository.MedicationHistoryRepository
 import com.medicapp.data.repository.PagedResult
 import com.medicapp.data.repository.PagingDefaults
-import com.medicapp.data.repository.ReasonRepository
-import com.medicapp.model.Reason
 import com.medicapp.model.TakenEntry
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -25,17 +23,10 @@ import kotlinx.coroutines.flow.update
 
 class HistoryViewModel(
     private val repository: MedicationHistoryRepository,
-    reasonRepository: ReasonRepository,
 ) : ViewModel() {
 
     private val _query = MutableStateFlow("")
     val query: StateFlow<String> = _query.asStateFlow()
-
-    private val _selectedReasonId = MutableStateFlow<String?>(null)
-    val selectedReasonId: StateFlow<String?> = _selectedReasonId.asStateFlow()
-
-    val reasons: StateFlow<List<Reason>> = reasonRepository.getAll()
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     private val _limit = MutableStateFlow(PagingDefaults.PAGE_SIZE)
 
@@ -60,14 +51,10 @@ class HistoryViewModel(
         .map { it.isFromCache }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
-    val entries: StateFlow<List<TakenEntry>> = combine(
-        allEntries,
-        _query,
-        _selectedReasonId,
-    ) { entries, query, reasonId ->
+    // Un solo buscador para medicamento y motivo: los chips de motivo repetían lo que ya hace.
+    val entries: StateFlow<List<TakenEntry>> = combine(allEntries, _query) { entries, query ->
         val trimmed = query.trim()
         entries
-            .filter { reasonId == null || it.reasonId == reasonId }
             .filter {
                 trimmed.isBlank() ||
                     it.nombreMedicamento.contains(trimmed, ignoreCase = true) ||
@@ -83,15 +70,6 @@ class HistoryViewModel(
         _query.value = newQuery
     }
 
-    fun onReasonFilterChanged(reasonId: String?) {
-        _selectedReasonId.value = reasonId
-    }
-
-    /** Chip de motivo: lo elige o, si ya estaba elegido, vuelve a mostrar todos. */
-    fun onReasonChipClicked(reasonId: String) {
-        _selectedReasonId.update { if (it == reasonId) null else reasonId }
-    }
-
     fun loadMore() {
         if (historyPage.value.hasMore) {
             _limit.update { it + PagingDefaults.PAGE_INCREMENT }
@@ -102,7 +80,7 @@ class HistoryViewModel(
         val Factory: ViewModelProvider.Factory = viewModelFactory {
             initializer {
                 val app = this[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY] as MedicApp
-                HistoryViewModel(app.container.medicationHistoryRepository, app.container.reasonRepository)
+                HistoryViewModel(app.container.medicationHistoryRepository)
             }
         }
     }

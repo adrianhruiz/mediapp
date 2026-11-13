@@ -1,23 +1,19 @@
 package com.medicapp.ui.history
 
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -35,22 +31,17 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.medicapp.model.CustomMedication
-import com.medicapp.model.Reason
 import com.medicapp.model.TakenEntry
-import com.medicapp.ui.components.GroupHeader
 import com.medicapp.ui.components.GroupedList
 import com.medicapp.ui.components.GroupedRow
 import com.medicapp.ui.components.MedicationNames
 import com.medicapp.ui.components.MedicationThumbnail
 import com.medicapp.ui.components.OnBottomReached
-import com.medicapp.ui.theme.DmMono
-import java.time.Instant
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
-import java.util.Locale
+import androidx.compose.ui.text.style.TextOverflow
+import java.time.LocalDate
 
 /**
- * Lista de medicamentos tomados, agrupada por mes. Tocar una entrada la abre para editar su
+ * Lista de medicamentos tomados, agrupada por día y con dos líneas por toma. Tocar una entrada la abre para editar su
  * motivo o borrarla; la miniatura abre la ficha del medicamento cuando la hay.
  */
 @Composable
@@ -62,12 +53,10 @@ fun HistoryScreen(
 ) {
     val entries by viewModel.entries.collectAsStateWithLifecycle()
     val query by viewModel.query.collectAsStateWithLifecycle()
-    val reasons by viewModel.reasons.collectAsStateWithLifecycle()
-    val selectedReasonId by viewModel.selectedReasonId.collectAsStateWithLifecycle()
     val hasAnyEntries by viewModel.hasAnyEntries.collectAsStateWithLifecycle()
     val hasMore by viewModel.hasMore.collectAsStateWithLifecycle()
     val isOffline by viewModel.isOffline.collectAsStateWithLifecycle()
-    val months = remember(entries) { HistoryMonths.group(entries) }
+    val days = remember(entries) { HistoryDays.group(entries, LocalDate.now()) }
     val listState = rememberLazyListState()
     listState.OnBottomReached(onLoadMore = viewModel::loadMore)
 
@@ -75,23 +64,16 @@ fun HistoryScreen(
         modifier = Modifier
             .fillMaxSize()
             .padding(contentPadding)
-            .padding(16.dp),
+            .padding(horizontal = 20.dp, vertical = 16.dp),
     ) {
         if (hasAnyEntries) {
             OutlinedTextField(
                 value = query,
                 onValueChange = viewModel::onQueryChanged,
                 modifier = Modifier.fillMaxWidth(),
-                placeholder = { Text("Buscar por medicamento o motivo") },
+                placeholder = { Text("Medicamento o motivo") },
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                 singleLine = true,
-            )
-            ReasonChips(
-                reasons = reasons,
-                selectedReasonId = selectedReasonId,
-                onAll = { viewModel.onReasonFilterChanged(null) },
-                onReason = viewModel::onReasonChipClicked,
-                modifier = Modifier.padding(top = 8.dp),
             )
         }
 
@@ -131,11 +113,17 @@ fun HistoryScreen(
                     .fillMaxWidth()
                     .weight(1f)
                     .padding(top = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
+                verticalArrangement = Arrangement.spacedBy(20.dp),
             ) {
-                items(months, key = { it.month.toString() }) { group ->
+                items(days, key = { it.day.toString() }) { group ->
                     Column {
-                        GroupHeader(group.label)
+                        // En frase normal, no en mayúsculas mono: «Hoy», «Ayer», «Martes, 3 de noviembre».
+                        Text(
+                            group.label,
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.secondary,
+                            modifier = Modifier.padding(start = 4.dp, bottom = 8.dp),
+                        )
                         GroupedList {
                             group.entries.forEachIndexed { index, entry ->
                                 HistoryEntryRow(
@@ -160,7 +148,6 @@ fun HistoryScreen(
     }
 }
 
-private val dateFormat = DateTimeFormatter.ofPattern("d MMM · HH:mm", Locale.forLanguageTag("es-ES"))
 
 @Composable
 private fun HistoryEntryRow(
@@ -169,7 +156,7 @@ private fun HistoryEntryRow(
     onOpen: () -> Unit,
     onOpenMedication: () -> Unit,
 ) {
-    val (name, detail) = MedicationNames.split(entry.nombreMedicamento)
+    val (name, _) = MedicationNames.split(entry.nombreMedicamento)
     // Los medicamentos propios no están en CIMA: no hay ficha que abrir.
     val hasSheet = entry.nregistro.isNotBlank() && !CustomMedication.isCustom(entry.nregistro)
     GroupedRow(
@@ -184,52 +171,17 @@ private fun HistoryEntryRow(
                 .clickable(enabled = hasSheet, role = Role.Button, onClick = onOpenMedication)
                 .semantics { contentDescription = "Ver ficha de $name" },
         )
+        // Dos líneas: el día ya va en la cabecera del grupo, así que basta la hora y el motivo.
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(name, style = MaterialTheme.typography.titleMedium)
-            detail?.let {
-                Text(
-                    it,
-                    style = MaterialTheme.typography.bodySmall.copy(fontFamily = DmMono),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            Text(entry.reasonNombre, style = MaterialTheme.typography.bodyMedium)
-            val formattedDate = remember(entry.timestampMillis) {
-                Instant.ofEpochMilli(entry.timestampMillis)
-                    .atZone(ZoneId.systemDefault())
-                    .format(dateFormat)
-                    .replace(".", "")
-            }
+            Text(name, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(
-                formattedDate,
-                style = MaterialTheme.typography.bodySmall.copy(fontFamily = DmMono),
+                remember(entry.timestampMillis, entry.reasonNombre) { HistoryDays.note(entry) },
+                style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
         }
     }
 }
 
-/** Filtro por motivo en chips: «Todos» y uno por motivo; tocar el elegido lo quita. */
-@Composable
-private fun ReasonChips(
-    reasons: List<Reason>,
-    selectedReasonId: String?,
-    onAll: () -> Unit,
-    onReason: (String) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    if (reasons.isEmpty()) return
-    Row(
-        modifier = modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        FilterChip(selected = selectedReasonId == null, onClick = onAll, label = { Text("Todos") })
-        reasons.forEach { reason ->
-            FilterChip(
-                selected = reason.id == selectedReasonId,
-                onClick = { onReason(reason.id) },
-                label = { Text(reason.nombre) },
-            )
-        }
-    }
-}
