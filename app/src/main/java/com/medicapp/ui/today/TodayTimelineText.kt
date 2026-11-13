@@ -67,8 +67,18 @@ internal fun TodayDose.whenText(nowMillis: Long): String {
  * La segunda línea de una fila cerrada. Lo que está por venir no lleva nada: la hora ya está a
  * la izquierda y repetirla solo añadía ruido.
  */
-internal fun TodayDose.timelineNote(nowMillis: Long): String? =
-    if (dose.status == DoseStatus.PENDING && !overdue) null else whenText(nowMillis)
+internal fun TodayDose.timelineNote(nowMillis: Long): String? = when {
+    dose.status == DoseStatus.PENDING && !overdue -> null
+    // De otro día: la fecha ya va en la columna de la hora, no se repite aquí.
+    carriedOver && dose.status == DoseStatus.PENDING -> "Sin tomar"
+    else -> whenText(nowMillis)
+}
+
+/** La hora de la fila; si la toma es de otro día, con el día encima («ayer», «21 oct»). */
+internal fun TodayDose.timelineHour(nowMillis: Long): String {
+    val at = dose.scheduledAtMillis
+    return at.earlierDayText(nowMillis)?.let { "${it.removePrefix("el ")}\n${at.hour()}" } ?: at.hour()
+}
 
 /** «20 mg · para la acidez»: dosis y motivo en una línea, sin la etiqueta «Para:». */
 internal fun TodayDose.detailLine(): String {

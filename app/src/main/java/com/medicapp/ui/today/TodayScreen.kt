@@ -95,9 +95,11 @@ fun TodayScreen(
     val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
     var selectedId by rememberSaveable { mutableStateOf<String?>(null) }
+    var showEarlier by rememberSaveable { mutableStateOf(false) }
     val plan = state.plan
     // Sin elección del usuario se abre la que toca; con todo hecho, ninguna.
-    val open = plan.doses.firstOrNull { it.dose.id == selectedId } ?: plan.next
+    val timeline = TodayTimeline.of(plan, showEarlier, selectedId)
+    val open = timeline.open
 
     Box(modifier = Modifier.fillMaxSize().padding(contentPadding)) {
         LazyColumn(
@@ -108,8 +110,6 @@ fun TodayScreen(
                 TodayHeader(
                     nowMillis = state.nowMillis,
                     empty = !state.loading && plan.doses.isEmpty(),
-                    carriedOverCount = plan.carriedOverCount,
-                    loading = state.loading,
                     snackbarHostState = snackbarHostState,
                     onLogout = onLogout,
                 )
@@ -122,16 +122,26 @@ fun TodayScreen(
                 }
                 plan.doses.isEmpty() -> item { EmptyToday(onSearch = onSearch, onOpenReminders = onOpenReminders) }
                 else -> {
-                    // Una sola pieza para que la línea vertical no se corte entre filas.
-                    item(key = "timeline") {
+                    if (timeline.earlierCount > 0) {
+                        item(key = "earlier") {
+                            EarlierRow(
+                                count = timeline.earlierCount,
+                                expanded = showEarlier,
+                                onToggle = { showEarlier = !showEarlier },
+                            )
+                        }
+                    }
+                    // Una sola pieza para que la línea vertical no se corte entre filas. Con todo
+                    // plegado y nada de hoy, no se pinta: dejaba un hueco vacío.
+                    if (timeline.visible.isNotEmpty()) item(key = "timeline") {
                         Column {
-                            plan.doses.forEachIndexed { index, dose ->
+                            timeline.visible.forEachIndexed { index, dose ->
                                 TimelineRow(
                                     dose = dose,
                                     nowMillis = state.nowMillis,
                                     open = dose == open,
                                     first = index == 0,
-                                    last = index == plan.doses.lastIndex,
+                                    last = index == timeline.visible.lastIndex,
                                     onOpen = { selectedId = dose.dose.id },
                                     onMarkTaken = { viewModel.markTaken(context, dose) },
                                 )
@@ -159,8 +169,6 @@ fun TodayScreen(
 private fun TodayHeader(
     nowMillis: Long,
     empty: Boolean,
-    carriedOverCount: Int,
-    loading: Boolean,
     snackbarHostState: SnackbarHostState,
     onLogout: () -> Unit,
 ) {
@@ -175,13 +183,6 @@ private fun TodayHeader(
             }
             // El recuento ya se ve en la línea: el título solo dice dónde estás.
             Text(if (empty) "Hoy, sin tomas" else "Hoy", style = MaterialTheme.typography.headlineMedium)
-            if (!loading && carriedOverCount > 0) {
-                Text(
-                    text = if (carriedOverCount == 1) "1 toma sin marcar de días anteriores" else "$carriedOverCount tomas sin marcar de días anteriores",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.error,
-                )
-            }
         }
         SettingsButton(snackbarHostState = snackbarHostState, onLogout = onLogout)
     }
@@ -224,8 +225,9 @@ private fun TimelineRow(
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Text(
-            dose.dose.scheduledAtMillis.hour(),
-            style = MaterialTheme.typography.bodyMedium.copy(fontFamily = DmMono),
+            dose.timelineHour(nowMillis),
+            style = (if (dose.carriedOver) MaterialTheme.typography.bodySmall else MaterialTheme.typography.bodyMedium)
+                .copy(fontFamily = DmMono),
             fontWeight = if (open && urgent) FontWeight.SemiBold else FontWeight.Normal,
             color = when {
                 open && urgent -> MaterialTheme.colorScheme.error
@@ -356,6 +358,28 @@ private fun detailText(dose: TodayDose) = buildAnnotatedString {
         append(line.removePrefix(detail))
     } else {
         append(line)
+    }
+}
+
+/**
+ * Las tomas sin marcar de días anteriores, en una fila que se despliega: el recuento se dice una
+ * vez, aquí, en vez de en la cabecera y en cada fila roja.
+ */
+@Composable
+private fun EarlierRow(count: Int, expanded: Boolean, onToggle: () -> Unit) {
+    GroupedList {
+        GroupedRow(onClick = onToggle, chevron = false) {
+            Text(
+                if (count == 1) "1 toma sin marcar de días anteriores" else "$count tomas sin marcar de días anteriores",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.weight(1f),
+            )
+            Text(
+                if (expanded) "Ocultar" else "Ver",
+                style = MaterialTheme.typography.labelLarge,
+            )
+        }
     }
 }
 
