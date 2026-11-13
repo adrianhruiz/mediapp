@@ -4,7 +4,6 @@ import android.Manifest
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -21,6 +20,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
@@ -39,23 +39,22 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.medicapp.ui.components.GelButton
 import com.medicapp.domain.DoseInterval
 import com.medicapp.domain.DoseScheduleCalculator
-import com.medicapp.model.Reason
 import com.medicapp.notifications.DoseAlarmScheduler
-import com.medicapp.ui.components.BlisterCell
-import com.medicapp.ui.components.DoseCellState
-import com.medicapp.ui.components.Eyebrow
-import com.medicapp.ui.components.FoilCard
+import com.medicapp.ui.components.GelBarButton
+import com.medicapp.ui.components.GroupHeader
+import com.medicapp.ui.components.GroupedList
+import com.medicapp.ui.components.GroupedRow
 import com.medicapp.ui.components.MedicationNames
-import com.medicapp.ui.components.PillStyles
 import com.medicapp.ui.components.ScreenHeader
-import com.medicapp.ui.components.SecondaryButton
+import com.medicapp.ui.components.SegmentedControl
 import com.medicapp.ui.theme.DmMono
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -94,19 +93,22 @@ fun CreateScheduleScreen(
             .padding(16.dp)
             .verticalScroll(rememberScrollState()),
     ) {
+        // Guardar va en la cabecera; «Cancelar» sobra con la flecha atrás.
         ScreenHeader(
             title = MedicationNames.split(uiState.nombreMedicamento).first,
             eyebrow = if (uiState.isEditing) "Editar pauta" else "Nueva pauta",
             onBack = onCancel,
             modifier = Modifier.padding(bottom = 16.dp),
-        )
+        ) {
+            GelBarButton(onClick = { viewModel.save(context) }, enabled = uiState.canSave) {
+                Text("Guardar")
+            }
+        }
 
         if (uiState.hasDuplicateActiveSchedule) {
             Card(
                 modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
-                colors = androidx.compose.material3.CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.errorContainer,
-                ),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
             ) {
                 Text(
                     "Ya tienes una pauta activa para este medicamento. " +
@@ -117,118 +119,114 @@ fun CreateScheduleScreen(
             }
         }
 
-        Text("Frecuencia", style = MaterialTheme.typography.titleMedium)
-        FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.padding(top = 8.dp),
-        ) {
-            DoseInterval.presets.forEach { hours ->
-                FilterChip(
-                    selected = uiState.intervalHours == hours,
-                    onClick = { viewModel.onIntervalPresetSelected(hours) },
-                    label = { Text(DoseInterval.label(hours)) },
-                )
-            }
-        }
-        // Campo libre: cantidad + unidad, para frecuencias que no están entre los chips.
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-        ) {
-            OutlinedTextField(
-                value = uiState.intervalAmountInput,
-                onValueChange = viewModel::onIntervalAmountChanged,
-                label = { Text("Cada") },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                modifier = Modifier.weight(1f),
-                singleLine = true,
-            )
-            listOf(
-                DoseInterval.Unit.HOURS to "horas",
-                DoseInterval.Unit.DAYS to "días",
-                DoseInterval.Unit.WEEKS to "semanas",
-            ).forEach { (unit, label) ->
-                FilterChip(
-                    selected = uiState.intervalUnit == unit,
-                    onClick = { viewModel.onIntervalUnitChanged(unit) },
-                    label = { Text(label) },
-                )
-            }
-        }
-
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.fillMaxWidth().padding(top = 24.dp),
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text("Sin fin", style = MaterialTheme.typography.titleMedium)
-                Text(
-                    "Hasta que la cierres",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            Switch(checked = uiState.openEnded, onCheckedChange = viewModel::onOpenEndedChanged)
-        }
-
-        // Una pauta sin fin no tiene total: el campo sobra mientras el interruptor esté puesto.
-        if (!uiState.openEnded) {
-            OutlinedTextField(
-                value = uiState.totalDosesInput,
-                onValueChange = viewModel::onTotalDosesChanged,
-                label = { Text("Cantidad de tomas del periodo") },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
-                singleLine = true,
-                isError = uiState.totalBelowTaken,
-                supportingText = if (uiState.keptDoseCount > 0) {
-                    { Text("Ya llevas ${uiState.keptDoseCount}: el total tiene que ser mayor") }
+        // Un solo control para la frecuencia. «Otra» abre cantidad + unidad (horas, días o
+        // semanas) para lo que no está entre las tres de un toque.
+        GroupHeader("Frecuencia")
+        val isQuickInterval = !uiState.isCustomInterval && uiState.intervalHours in QUICK_INTERVAL_HOURS
+        SegmentedControl(
+            options = QUICK_INTERVAL_HOURS.map { "$it h" } + "Otra",
+            selectedIndex = if (isQuickInterval) QUICK_INTERVAL_HOURS.indexOf(uiState.intervalHours) else QUICK_INTERVAL_HOURS.size,
+            onSelect = { index ->
+                if (index < QUICK_INTERVAL_HOURS.size) {
+                    viewModel.onIntervalPresetSelected(QUICK_INTERVAL_HOURS[index])
                 } else {
-                    null
-                },
-            )
-        }
-
-        Text(
-            startTimeLabel(uiState),
-            style = MaterialTheme.typography.titleMedium,
-            modifier = Modifier.padding(top = 24.dp),
+                    viewModel.onCustomIntervalSelected()
+                }
+            },
         )
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(top = 8.dp),
-        ) {
-            val timeFormatter = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
-            val formattedStartAt = remember(uiState.startAtMillis) {
-                timeFormatter.format(Date(uiState.startAtMillis))
-            }
-            Text(
-                formattedStartAt,
-                style = MaterialTheme.typography.bodyLarge,
-                modifier = Modifier.padding(end = 12.dp),
-            )
-            SecondaryButton(onClick = { showTimePicker = true }) {
-                Text("Cambiar hora")
-            }
-        }
-
-        FirstDayPreview(uiState)
-
-        OutlinedTextField(
-            value = uiState.reasonInput,
-            onValueChange = viewModel::onReasonInputChanged,
-            label = { Text("Motivo (ej. alergia estacional)") },
-            modifier = Modifier.fillMaxWidth().padding(top = 24.dp),
-            singleLine = true,
-        )
-        if (uiState.suggestions.isNotEmpty()) {
-            Column(modifier = Modifier.padding(top = 8.dp)) {
-                uiState.suggestions.forEach { reason ->
-                    ReasonSuggestionRow(reason = reason, onClick = { viewModel.onSuggestionSelected(reason) })
+        if (!isQuickInterval) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+            ) {
+                OutlinedTextField(
+                    value = uiState.intervalAmountInput,
+                    onValueChange = viewModel::onIntervalAmountChanged,
+                    label = { Text("Cada") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.weight(1f),
+                    singleLine = true,
+                )
+                listOf(
+                    DoseInterval.Unit.HOURS to "horas",
+                    DoseInterval.Unit.DAYS to "días",
+                    DoseInterval.Unit.WEEKS to "semanas",
+                ).forEach { (unit, label) ->
+                    FilterChip(
+                        selected = uiState.intervalUnit == unit,
+                        onClick = { viewModel.onIntervalUnitChanged(unit) },
+                        label = { Text(label) },
+                    )
                 }
             }
         }
+
+        GroupedList(modifier = Modifier.padding(top = 24.dp)) {
+            GroupedRow(chevron = false) {
+                Text("Sin fin", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+                Switch(checked = uiState.openEnded, onCheckedChange = viewModel::onOpenEndedChanged)
+            }
+            // Una pauta sin fin no tiene duración: la fila de días sobra con el interruptor puesto.
+            if (!uiState.openEnded) {
+                GroupedRow(divider = true, chevron = false) {
+                    Text(
+                        "Durante ${uiState.days} ${if (uiState.days == 1) "día" else "días"}",
+                        style = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier.weight(1f),
+                    )
+                    GelBarButton(
+                        onClick = viewModel::decrementDays,
+                        enabled = uiState.days > 1,
+                        modifier = Modifier.semantics { contentDescription = "Un día menos" },
+                    ) { Text("−") }
+                    GelBarButton(
+                        onClick = viewModel::incrementDays,
+                        enabled = uiState.days < ScheduleDuration.MAX_DAYS,
+                        modifier = Modifier.semantics { contentDescription = "Un día más" },
+                    ) { Text("+") }
+                }
+            }
+            GroupedRow(divider = true, onClick = { showTimePicker = true }) {
+                Text(startTimeLabel(uiState), style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+                val formattedStartAt = remember(uiState.startAtMillis) { previewHour.format(Date(uiState.startAtMillis)) }
+                Text(
+                    formattedStartAt,
+                    style = MaterialTheme.typography.bodyLarge.copy(fontFamily = DmMono),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        ScheduleSummary(uiState)
+        // Al editar, las tomas hechas se quedan: el total tiene que dejar alguna por hacer.
+        if (uiState.keptDoseCount > 0 && !uiState.openEnded) {
+            Text(
+                "Ya llevas ${uiState.keptDoseCount}: el total tiene que ser mayor",
+                style = MaterialTheme.typography.bodySmall,
+                color = if (uiState.totalBelowTaken) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 4.dp, top = 4.dp),
+            )
+        }
+
+        GroupHeader("Motivo", modifier = Modifier.padding(top = 24.dp))
+        if (uiState.reasons.isNotEmpty()) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                uiState.reasons.forEach { reason ->
+                    FilterChip(
+                        selected = reason.nombre.equals(uiState.reasonInput.trim(), ignoreCase = true),
+                        onClick = { viewModel.onReasonSelected(reason) },
+                        label = { Text(reason.nombre) },
+                    )
+                }
+            }
+        }
+        OutlinedTextField(
+            value = uiState.reasonInput,
+            onValueChange = viewModel::onReasonInputChanged,
+            placeholder = { Text("Motivo (ej. alergia estacional)") },
+            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+            singleLine = true,
+        )
 
         if (uiState.saveFailed) {
             Text(
@@ -237,20 +235,6 @@ fun CreateScheduleScreen(
                 style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.padding(top = 16.dp),
             )
-        }
-
-        GelButton(
-            onClick = { viewModel.save(context) },
-            enabled = uiState.reasonInput.isNotBlank() &&
-                uiState.intervalHours != null &&
-                (uiState.openEnded || uiState.totalDosesInput.isNotBlank()) &&
-                !uiState.hasDuplicateActiveSchedule,
-            modifier = Modifier.fillMaxWidth().padding(top = 24.dp),
-        ) {
-            Text(if (uiState.isEditing) "Guardar cambios" else "Guardar pauta")
-        }
-        SecondaryButton(onClick = onCancel, modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
-            Text("Cancelar")
         }
     }
 
@@ -263,7 +247,7 @@ fun CreateScheduleScreen(
         )
         AlertDialog(
             onDismissRequest = { showTimePicker = false },
-            title = { Text(startTimeLabel(uiState)) },
+            title = { Text("Hora de la ${startTimeLabel(uiState).lowercase()}") },
             text = { TimePicker(state = timePickerState) },
             confirmButton = {
                 TextButton(onClick = {
@@ -306,81 +290,36 @@ fun CreateScheduleScreen(
     }
 }
 
+/** Al editar, la hora que se pide es la de la próxima toma, no la de la primera. */
 private fun startTimeLabel(uiState: CreateScheduleUiState) =
-    if (uiState.isEditing) "Hora de la próxima toma" else "Hora de la primera toma"
+    if (uiState.isEditing) "Próxima toma" else "Primera toma"
 
 private val previewHour = SimpleDateFormat("HH:mm", Locale.forLanguageTag("es-ES"))
-private val previewDay = SimpleDateFormat("EEEE d MMM 'a las' HH:mm", Locale.forLanguageTag("es-ES"))
-
-/** Más celdas no caben en una fila y no aportan: con ver el ritmo del primer día basta. */
-private const val MAX_PREVIEW_CELLS = 6
 
 /**
- * Las tomas del primer día en celdas de blíster, y cuándo acaba la pauta: se ve el ritmo antes
- * de guardar, sin tener que hacer la cuenta de cabeza.
+ * El total de tomas y cuándo acaba, en una línea: se ve sin hacer la cuenta de cabeza. Al
+ * editar solo cuentan las que faltan; las hechas se quedan como están.
  */
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun FirstDayPreview(uiState: CreateScheduleUiState) {
+private fun ScheduleSummary(uiState: CreateScheduleUiState) {
     val interval = uiState.intervalHours ?: return
-    // Sin fin se pinta la primera ventana de tomas, que es lo que se crea al guardar.
-    val times = if (uiState.openEnded) {
-        DoseScheduleCalculator.openEndedWindow(uiState.startAtMillis, interval, uiState.startAtMillis)
-    } else {
-        // Al editar solo se crean las tomas que faltan; las hechas se quedan como están.
-        val total = uiState.totalDosesInput.toIntOrNull()
-            ?.minus(uiState.keptDoseCount)
-            ?.takeIf { it > 0 } ?: return
-        DoseScheduleCalculator.computeDoseTimes(uiState.startAtMillis, interval, total)
+    if (uiState.openEnded) {
+        Text(
+            "Se repite hasta que la cierres",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(start = 4.dp, top = 8.dp),
+        )
+        return
     }
-    val total = times.size
-    val firstDay = times.takeWhile { it < uiState.startAtMillis + 24 * 3_600_000L }.take(MAX_PREVIEW_CELLS)
-    val pill = PillStyles.forMedication(uiState.nregistro, uiState.nombreMedicamento)
-
-    // Con un día o más entre tomas solo cae una en 24 h: "Primer día" ya no describe la tarjeta.
-    val eyebrow = when {
-        interval >= 24 -> "Primeras tomas"
-        uiState.isEditing -> "Próximas 24 h"
-        else -> "Primer día"
-    }
-    Eyebrow(eyebrow, modifier = Modifier.padding(top = 24.dp, bottom = 8.dp))
-    FoilCard(modifier = Modifier.fillMaxWidth()) {
-        FlowRow(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceEvenly,
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            firstDay.forEach { time ->
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    BlisterCell(state = DoseCellState.PENDING, pill = pill, width = 44.dp)
-                    Text(
-                        previewHour.format(Date(time)),
-                        style = MaterialTheme.typography.labelLarge.copy(fontFamily = DmMono),
-                    )
-                }
-            }
-        }
+    val total = uiState.totalDoses?.minus(uiState.keptDoseCount)?.takeIf { it > 0 } ?: return
+    val last = remember(uiState.startAtMillis, interval, total) {
+        DoseScheduleCalculator.computeDoseTimes(uiState.startAtMillis, interval, total).last()
     }
     Text(
-        if (uiState.openEnded) {
-            "Se repite hasta que la cierres · se preparan las tomas de los próximos 7 días"
-        } else {
-            "$total ${if (total == 1) "toma" else "tomas"}${if (uiState.isEditing) " por hacer" else ""} · la última el ${previewDay.format(Date(times.last())).replace(".", "")}"
-        },
-        style = MaterialTheme.typography.bodyMedium,
+        ScheduleDuration.summary(total, last),
+        style = MaterialTheme.typography.bodyMedium.copy(fontFamily = DmMono),
         color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(top = 8.dp),
+        modifier = Modifier.padding(start = 4.dp, top = 8.dp),
     )
-}
-
-@Composable
-private fun ReasonSuggestionRow(reason: Reason, onClick: () -> Unit) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 2.dp)
-            .clickable(onClick = onClick),
-    ) {
-        Text(reason.nombre, modifier = Modifier.padding(12.dp))
-    }
 }

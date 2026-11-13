@@ -26,6 +26,8 @@ data class AddEditUiState(
     val suggestions: List<Reason> = emptyList(),
     val isEditMode: Boolean = false,
     val isSaved: Boolean = false,
+    /** La entrada en edición se ha borrado: la pantalla se cierra igual que al guardar. */
+    val isDeleted: Boolean = false,
     val isLoading: Boolean = true,
     /** Motivos con los que este medicamento ya está en el historial, sin contar la entrada en edición. */
     val existingReasonNombres: List<String> = emptyList(),
@@ -136,6 +138,16 @@ class AddEditEntryViewModel(
                 )
             }
             _uiState.update { it.copy(isSaved = true) }
+        }
+    }
+
+    /** Borra la entrada en edición. Solo existe al editar: una entrada nueva aún no está guardada. */
+    fun delete() {
+        val entry = originalEntry ?: return
+        if (!_uiState.value.isEditMode) return
+        viewModelScope.launch {
+            historyRepository.delete(entry)
+            _uiState.update { it.copy(isDeleted = true) }
         }
     }
 

@@ -13,6 +13,7 @@ import com.medicapp.data.repository.FakeReasonRepository
 import com.medicapp.model.TakenEntry
 import com.medicapp.ui.theme.MedicAppTheme
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -34,15 +35,15 @@ class AddEditEntryScreenTest {
         fotoUrl = null,
     )
 
-    private fun setContent(history: FakeMedicationHistoryRepository) {
-        val viewModel = AddEditEntryViewModel(
-            history,
-            FakeReasonRepository(),
-            SavedStateHandle(mapOf("nregistro" to "77758", "nombre" to "Ibuprofeno")),
-        )
+    private fun setContent(
+        history: FakeMedicationHistoryRepository,
+        args: Map<String, Any?> = mapOf("nregistro" to "77758", "nombre" to "Ibuprofeno"),
+        onDone: () -> Unit = {},
+    ) {
+        val viewModel = AddEditEntryViewModel(history, FakeReasonRepository(), SavedStateHandle(args))
         composeRule.setContent {
             MedicAppTheme {
-                AddEditEntryScreen(onDone = {}, onCancel = {}, viewModel = viewModel)
+                AddEditEntryScreen(onDone = onDone, onCancel = {}, viewModel = viewModel)
             }
         }
     }
@@ -77,5 +78,29 @@ class AddEditEntryScreenTest {
 
         assertEquals(1, history.entries.size)
         composeRule.onNodeWithText("Guardar").assertIsNotEnabled()
+    }
+
+    @Test
+    fun deletingAnEntryAsksForConfirmationThenRemovesIt() {
+        val history = FakeMedicationHistoryRepository(listOf(existingEntry))
+        var done = false
+        setContent(history, args = mapOf("entryId" to existingEntry.id), onDone = { done = true })
+
+        composeRule.onNodeWithText("Eliminar del historial").performClick()
+        composeRule.onNodeWithText("Eliminar entrada").assertExists()
+        assertEquals(1, history.entries.size)
+
+        composeRule.onNodeWithText("Eliminar").performClick()
+        composeRule.waitForIdle()
+
+        assertTrue(history.entries.isEmpty())
+        assertTrue(done)
+    }
+
+    @Test
+    fun aNewEntryHasNoDeleteAction() {
+        setContent(FakeMedicationHistoryRepository())
+
+        composeRule.onNodeWithText("Eliminar del historial").assertDoesNotExist()
     }
 }

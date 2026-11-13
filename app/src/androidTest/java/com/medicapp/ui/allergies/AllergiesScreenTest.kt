@@ -1,25 +1,22 @@
 package com.medicapp.ui.allergies
 
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasTestTag
-import androidx.compose.ui.test.hasText
-import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.width
-import com.medicapp.model.AtcCode
-import com.medicapp.model.PrincipioActivo
-import com.medicapp.ui.components.AddedChip
 import org.junit.Assert.assertTrue
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.onAllNodesWithContentDescription
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -62,79 +59,105 @@ class AllergiesScreenTest {
         }
     }
 
+    /** El buscador vive en la hoja «Añadir alergia»; no hay que elegir el tipo antes. */
+    private fun openAddSheetAndSearch(text: String) {
+        composeRule.onNodeWithText("Añadir alergia").performClick()
+        composeRule.onNode(hasSetTextAction()).performTextInput(text)
+    }
+
+    @Test
+    fun deletingTakesTwoStepsFromEditMode() {
+        val repository = FakeAllergyRepository(
+            listOf(Allergy(id = "1", tipo = AllergyType.FAMILIA, atcCodigo = "J01C", atcNombre = "Penicilinas")),
+        )
+        val viewModel = AllergiesViewModel(repository, MedicationCatalogRepository(FakeCimaApiService()))
+        composeRule.setContent {
+            MedicAppTheme { AllergiesScreen(contentPadding = PaddingValues(), onOpenReport = {}, viewModel = viewModel) }
+        }
+
+        composeRule.onNodeWithText("FAMILIAS ATC · 1").assertExists()
+        composeRule.onNodeWithContentDescription("Quitar alergia").assertDoesNotExist()
+
+        composeRule.onNodeWithText("Editar").performClick()
+        composeRule.onNodeWithContentDescription("Quitar alergia").performClick()
+        composeRule.onNodeWithText("Eliminar").performClick()
+
+        composeRule.waitUntil(5_000) {
+            composeRule.onAllNodesWithText("J01C").fetchSemanticsNodes().isEmpty()
+        }
+    }
+
     @Test
     fun anAllergyAlreadyMarkedIsFlaggedInTheSearchResults() {
         setContent(
             listOf(Allergy(id = "1", tipo = AllergyType.FAMILIA, atcCodigo = "J01C", atcNombre = "Penicilinas")),
         )
 
-        composeRule.onNodeWithText("Familia (ATC)").performClick()
-        composeRule.onNodeWithText("Buscar familia (ej. Penicilina)").performTextInput("penicilina")
+        openAddSheetAndSearch("penicilina")
         composeRule.waitUntil(5_000) {
-            composeRule.onAllNodesWithText("Ya añadida").fetchSemanticsNodes().isNotEmpty()
+            composeRule.onAllNodesWithContentDescription("Ya añadida").fetchSemanticsNodes().isNotEmpty()
         }
 
-        composeRule.onNodeWithText("Ya añadida").assertExists()
+        composeRule.onNodeWithContentDescription("Ya añadida").assertExists()
     }
 
     @Test
     fun anAllergyNotMarkedYetOffersTheAddAction() {
         setContent(emptyList())
 
-        composeRule.onNodeWithText("Familia (ATC)").performClick()
-        composeRule.onNodeWithText("Buscar familia (ej. Penicilina)").performTextInput("penicilina")
+        openAddSheetAndSearch("penicilina")
         composeRule.waitUntil(5_000) {
             composeRule.onAllNodesWithContentDescription("Añadir alergia").fetchSemanticsNodes().isNotEmpty()
         }
 
-        composeRule.onNodeWithText("Ya añadida").assertDoesNotExist()
+        composeRule.onNodeWithContentDescription("Ya añadida").assertDoesNotExist()
     }
 
     /**
-     * Con un nombre largo el chip quedaba aplastado y su texto se partía letra a letra.
-     * Se compara con un chip suelto, que ocupa su ancho natural.
+     * Con un nombre largo la marca «Ya añadida» quedaba aplastada. Ahora es un icono: debe
+     * conservar su tamaño natural aunque el nombre ocupe todo el ancho.
      */
     private fun setRow(row: @Composable () -> Unit) {
         composeRule.setContent {
             MedicAppTheme {
-                Column {
-                    AddedChip("Ya añadida", Modifier.testTag("reference"))
-                    Box(Modifier.width(360.dp).testTag("row")) { row() }
-                }
+                Box(Modifier.width(360.dp).testTag("row")) { row() }
             }
         }
     }
 
-    private fun assertAddedChipIsNotSqueezed() {
-        val natural = composeRule.onNodeWithTag("reference").getUnclippedBoundsInRoot().width
-        val inRow = composeRule.onNode(hasText("Ya añadida") and hasAnyAncestor(hasTestTag("row")))
+    private fun assertAddedMarkIsNotSqueezed() {
+        val inRow = composeRule.onNode(hasContentDescription("Ya añadida") and hasAnyAncestor(hasTestTag("row")))
             .getUnclippedBoundsInRoot().width
-        assertTrue("El chip mide $inRow de ancho en vez de $natural", inRow >= natural - 1.dp)
+        assertTrue("El icono mide $inRow de ancho en vez de 24.dp", inRow >= 23.dp)
     }
 
     @Test
-    fun aLongIngredientNameDoesNotSqueezeTheAddedChip() {
+    fun aLongIngredientNameDoesNotSqueezeTheAddedMark() {
         setRow {
-            IngredientResultRow(
-                item = PrincipioActivo(id = 111, nombre = "METAMIZOL MAGNESICO HEXAHIDRATO"),
+            ResultRow(
+                name = "Metamizol magnesico hexahidrato",
+                code = null,
+                divider = false,
                 alreadyAdded = true,
                 onAdd = {},
             )
         }
 
-        assertAddedChipIsNotSqueezed()
+        assertAddedMarkIsNotSqueezed()
     }
 
     @Test
-    fun aLongFamilyNameDoesNotSqueezeTheAddedChip() {
+    fun aLongFamilyNameDoesNotSqueezeTheAddedMark() {
         setRow {
-            FamilyResultRow(
-                item = AtcCode(codigo = "M02AA", nombre = "Preparados con antiinflamatorios no esteroideos para uso topico", nivel = 4),
+            ResultRow(
+                name = "Preparados con antiinflamatorios no esteroideos para uso topico",
+                code = "M02AA",
+                divider = false,
                 alreadyAdded = true,
                 onAdd = {},
             )
         }
 
-        assertAddedChipIsNotSqueezed()
+        assertAddedMarkIsNotSqueezed()
     }
 }

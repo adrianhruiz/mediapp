@@ -95,7 +95,10 @@ class EditScheduleViewModelTest {
         assertEquals("Ibuprofeno", state.nombreMedicamento)
         assertEquals("8", state.intervalAmountInput)
         assertEquals(DoseInterval.Unit.HOURS, state.intervalUnit)
-        assertEquals("4", state.totalDosesInput)
+        // 4 tomas cada 8 h caben en 2 días, pero el total cargado se respeta tal cual.
+        assertEquals(2, state.days)
+        assertEquals(4, state.totalDoses)
+        assertFalse(state.isCustomInterval)
         assertEquals("Dolor", state.reasonInput)
         assertEquals(1, state.keptDoseCount)
         // La toma 2 (start + 8 h) ya pasó sin marcar; la próxima por delante es la 3.
@@ -121,6 +124,34 @@ class EditScheduleViewModelTest {
         assertEquals("1", state.intervalAmountInput)
         assertEquals(DoseInterval.Unit.WEEKS, state.intervalUnit)
         assertEquals(168, state.intervalHours)
+        // Una semana no está en «8 h · 12 h · 24 h»: el formulario se abre por «Otra».
+        assertTrue(state.isCustomInterval)
+        assertEquals(28, state.days)
+        assertEquals(4, state.totalDoses)
+    }
+
+    @Test
+    fun `editing only the reason keeps the stored total of doses`() = runTest(dispatcher) {
+        val scheduleId = scheduleWithFirstDoseTaken()
+        val viewModel = editViewModel(scheduleId)
+
+        viewModel.onReasonInputChanged("Fiebre")
+        viewModel.save(context)
+        advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.isSaved)
+        assertEquals(4, scheduleRepository.getSchedule(scheduleId)!!.totalDoses)
+    }
+
+    @Test
+    fun `touching the duration recomputes the total from the days`() = runTest(dispatcher) {
+        val viewModel = editViewModel(scheduleWithFirstDoseTaken())
+
+        viewModel.incrementDays()
+
+        // 3 días cada 8 h: ya no manda el total cargado, sino la cuenta.
+        assertEquals(3, viewModel.uiState.value.days)
+        assertEquals(9, viewModel.uiState.value.totalDoses)
     }
 
     @Test
@@ -129,9 +160,8 @@ class EditScheduleViewModelTest {
         val viewModel = editViewModel(scheduleId)
         val next = now + hour
 
-        viewModel.onIntervalAmountChanged("12")
-        viewModel.onIntervalUnitChanged(DoseInterval.Unit.HOURS)
-        viewModel.onTotalDosesChanged("3")
+        // Cada 12 h durante los 2 días cargados: 4 tomas en total, de las que 1 ya está hecha.
+        viewModel.onIntervalPresetSelected(12)
         viewModel.onStartAtChanged(next)
         viewModel.onReasonInputChanged("Fiebre")
         viewModel.save(context)
@@ -140,12 +170,12 @@ class EditScheduleViewModelTest {
         assertTrue(viewModel.uiState.value.isSaved)
         val schedule = scheduleRepository.getSchedule(scheduleId)!!
         assertEquals(12, schedule.intervalHours)
-        assertEquals(3, schedule.totalDoses)
+        assertEquals(4, schedule.totalDoses)
         assertEquals("Fiebre", schedule.reasonNombre)
         val doses = scheduleRepository.dosesSnapshot(scheduleId)
-        assertEquals(listOf(DoseStatus.TAKEN, DoseStatus.PENDING, DoseStatus.PENDING), doses.map { it.status })
-        assertEquals(listOf(start, next, next + 12 * hour), doses.map { it.scheduledAtMillis })
-        assertEquals(listOf(next, next + 12 * hour), alarms.scheduledAlarms.map { it.triggerAtTime }.sorted())
+        assertEquals(listOf(DoseStatus.TAKEN, DoseStatus.PENDING, DoseStatus.PENDING, DoseStatus.PENDING), doses.map { it.status })
+        assertEquals(listOf(start, next, next + 12 * hour, next + 24 * hour), doses.map { it.scheduledAtMillis })
+        assertEquals(listOf(next, next + 12 * hour, next + 24 * hour), alarms.scheduledAlarms.map { it.triggerAtTime }.sorted())
     }
 
     @Test
@@ -153,7 +183,9 @@ class EditScheduleViewModelTest {
         val scheduleId = scheduleWithFirstDoseTaken()
         val viewModel = editViewModel(scheduleId)
 
-        viewModel.onTotalDosesChanged("1")
+        // Una toma al día durante un día: 1 toma, y esa ya está hecha.
+        viewModel.onIntervalPresetSelected(24)
+        viewModel.decrementDays()
         viewModel.save(context)
         advanceUntilIdle()
 
@@ -172,9 +204,7 @@ class EditScheduleViewModelTest {
         )
         advanceUntilIdle()
 
-        viewModel.onIntervalAmountChanged("12")
-        viewModel.onIntervalUnitChanged(DoseInterval.Unit.HOURS)
-        viewModel.onTotalDosesChanged("2")
+        viewModel.onIntervalPresetSelected(12)
         viewModel.onStartAtChanged(now)
         viewModel.onReasonInputChanged("Dolor")
         viewModel.save(context)
@@ -201,7 +231,6 @@ class EditScheduleViewModelTest {
 
         viewModel.onIntervalPresetSelected(24)
         viewModel.onOpenEndedChanged(true)
-        viewModel.onTotalDosesChanged("")
         viewModel.onStartAtChanged(now)
         viewModel.onReasonInputChanged("Déficit")
         viewModel.save(context)
@@ -253,8 +282,10 @@ class EditScheduleViewModelTest {
         scheduleRepository.markDoseTaken(created.schedule.id, created.doses.first().id, "h1")
         val viewModel = editViewModel(created.schedule.id)
 
+        // Una toma al día durante 3 días: 3 tomas, de las que la primera ya está hecha.
         viewModel.onOpenEndedChanged(false)
-        viewModel.onTotalDosesChanged("3")
+        viewModel.incrementDays()
+        viewModel.incrementDays()
         viewModel.onStartAtChanged(now + hour)
         viewModel.save(context)
         advanceUntilIdle()
