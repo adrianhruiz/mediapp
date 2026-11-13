@@ -87,4 +87,58 @@ class BackupSerializerTest {
         assertTrue(name, name.startsWith("medicapp-copia-2026-07-2"))
         assertTrue(name, name.endsWith(".json"))
     }
+
+    private fun openEndedSchedule() = BackupSchedule(
+        id = "s2",
+        nregistro = "999",
+        nombreMedicamento = "VITAMINA D",
+        intervalHours = 168,
+        totalDoses = 0,
+        startAtMillis = 1_699_000_000_000L,
+        reasonId = "r1",
+        reasonNombre = "Déficit",
+        status = "ACTIVE",
+        openEnded = true,
+        doses = listOf(
+            BackupDose(id = "d1", doseNumber = 1, scheduledAtMillis = 1_699_000_000_000L, status = "TAKEN"),
+            BackupDose(id = "d2", doseNumber = 2, scheduledAtMillis = 1_699_604_800_000L, status = "PENDING"),
+        ),
+    )
+
+    @Test
+    fun `an open-ended schedule keeps its mode through a round trip`() {
+        val original = sample().copy(schedules = listOf(openEndedSchedule()))
+
+        val restored = BackupSerializer.decode(BackupSerializer.encode(original))
+
+        assertEquals(original, restored)
+        assertTrue(restored.schedules.single().openEnded)
+    }
+
+    @Test
+    fun `a backup made before open-ended schedules restores them as fixed`() {
+        val json = BackupSerializer.encode(sample()).replace(Regex(""",\s*"openEnded":\s*false"""), "")
+        assertTrue(!json.contains("openEnded"))
+
+        val restored = BackupSerializer.decode(json)
+
+        assertEquals(false, restored.schedules.single().openEnded)
+    }
+
+    @Test
+    fun `restoring an open-ended schedule keeps where its doses stopped so it can replenish`() {
+        val fields = openEndedSchedule().progressFields()
+
+        assertEquals(true, fields["openEnded"])
+        assertEquals(1_699_604_800_000L, fields["endAtMillis"])
+        assertEquals(2, fields["lastDoseNumber"])
+    }
+
+    @Test
+    fun `restoring a fixed schedule still ends at its last dose`() {
+        val fields = sample().schedules.single().progressFields()
+
+        assertEquals(false, fields["openEnded"])
+        assertEquals(1_699_086_400_000L, fields["endAtMillis"])
+    }
 }

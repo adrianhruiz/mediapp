@@ -1,6 +1,7 @@
 package com.medicapp.ui.schedule
 
 import android.content.Context
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -20,6 +21,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
 class RemindersViewModel(
@@ -51,13 +53,19 @@ class RemindersViewModel(
         }
     }
 
+    /** Como en el detalle: las alarmas que se quitan son las de las tomas que el cierre omitió. */
     fun closeSchedule(context: Context, schedule: MedicationSchedule) {
+        val appContext = context.applicationContext
         viewModelScope.launch {
-            val pendingDoses = scheduleRepository.getPendingDoses(schedule.id)
-            pendingDoses.forEach { dose ->
-                DoseAlarmScheduler.cancelDose(context.applicationContext, schedule.id, dose.id)
+            val skipped = try {
+                scheduleRepository.closeSchedule(schedule.id)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.w("RemindersViewModel", "Could not close schedule", e)
+                return@launch
             }
-            scheduleRepository.closeSchedule(schedule.id)
+            skipped.forEach { DoseAlarmScheduler.cancelDose(appContext, schedule.id, it) }
         }
     }
 

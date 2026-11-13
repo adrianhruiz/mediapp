@@ -62,12 +62,18 @@ interface ScheduleRepository {
         startAtMillis: Long,
         reasonId: String,
         reasonNombre: String,
+        /** Sin fin: se ignora [totalDoses] y se crean solo las tomas de los próximos días. */
+        openEnded: Boolean = false,
+        nowMillis: Long = System.currentTimeMillis(),
     ): ScheduleWithDoses
 
     /**
      * Cambia frecuencia, número de tomas, hora de la próxima toma y motivo de una pauta activa.
      * Las tomas hechas se conservan y las pendientes se sustituyen (ver `ScheduleEditPlanner`).
      * Devuelve null si la pauta ya no está activa o el total no deja ninguna toma por hacer.
+     *
+     * Con [openEnded] la pauta pasa a (o sigue siendo) sin fin: se ignora [totalDoses] y las
+     * pendientes se sustituyen por la ventana de los próximos días con la nueva frecuencia.
      */
     suspend fun updateSchedule(
         scheduleId: String,
@@ -76,13 +82,34 @@ interface ScheduleRepository {
         nextDoseAtMillis: Long,
         reasonId: String,
         reasonNombre: String,
+        openEnded: Boolean = false,
+        nowMillis: Long = System.currentTimeMillis(),
     ): ScheduleEditResult?
 
+    /**
+     * Marca la toma como hecha. Al marcar la última pendiente, una pauta de total fijo se cierra
+     * sola; una sin fin no, solo se cierra con [closeSchedule].
+     */
     suspend fun markDoseTaken(scheduleId: String, doseId: String, historyEntryId: String)
+
+    /**
+     * Crea las tomas que le faltan a una pauta sin fin activa para cubrir los próximos días
+     * (ver `DoseScheduleCalculator.openEndedReplenish`) y las devuelve para ponerles alarma a
+     * las que aún no han pasado. Tras un hueco largo incluye las perdidas, que salen atrasadas.
+     * Lista vacía si la pauta no es sin fin, no está activa o no le falta ninguna.
+     */
+    suspend fun replenishOpenEndedDoses(scheduleId: String, nowMillis: Long): List<MedicationDose>
+
+    /** [replenishOpenEndedDoses] de todas las pautas sin fin activas, consultando solo esas. */
+    suspend fun replenishOpenEndedSchedules(nowMillis: Long)
 
     suspend fun getPendingDoses(scheduleId: String): List<MedicationDose>
 
-    suspend fun closeSchedule(scheduleId: String)
+    /**
+     * Cierra la pauta y pasa a omitidas sus tomas pendientes. Devuelve los ids de esas tomas
+     * para quitarles la alarma: pueden incluir alguna que una reposición creó mientras tanto.
+     */
+    suspend fun closeSchedule(scheduleId: String): List<String>
 
     suspend fun getActiveSchedulesWithPendingDoses(): List<ScheduleWithDoses>
 }

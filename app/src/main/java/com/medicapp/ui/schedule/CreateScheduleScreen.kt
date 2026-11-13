@@ -25,6 +25,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TimePicker
@@ -156,20 +157,38 @@ fun CreateScheduleScreen(
             }
         }
 
-        OutlinedTextField(
-            value = uiState.totalDosesInput,
-            onValueChange = viewModel::onTotalDosesChanged,
-            label = { Text("Cantidad de tomas del periodo") },
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.fillMaxWidth().padding(top = 24.dp),
-            singleLine = true,
-            isError = uiState.totalBelowTaken,
-            supportingText = if (uiState.keptDoseCount > 0) {
-                { Text("Ya llevas ${uiState.keptDoseCount}: el total tiene que ser mayor") }
-            } else {
-                null
-            },
-        )
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text("Sin fin", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    "Hasta que la cierres",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Switch(checked = uiState.openEnded, onCheckedChange = viewModel::onOpenEndedChanged)
+        }
+
+        // Una pauta sin fin no tiene total: el campo sobra mientras el interruptor esté puesto.
+        if (!uiState.openEnded) {
+            OutlinedTextField(
+                value = uiState.totalDosesInput,
+                onValueChange = viewModel::onTotalDosesChanged,
+                label = { Text("Cantidad de tomas del periodo") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
+                singleLine = true,
+                isError = uiState.totalBelowTaken,
+                supportingText = if (uiState.keptDoseCount > 0) {
+                    { Text("Ya llevas ${uiState.keptDoseCount}: el total tiene que ser mayor") }
+                } else {
+                    null
+                },
+            )
+        }
 
         Text(
             startTimeLabel(uiState),
@@ -224,7 +243,7 @@ fun CreateScheduleScreen(
             onClick = { viewModel.save(context) },
             enabled = uiState.reasonInput.isNotBlank() &&
                 uiState.intervalHours != null &&
-                uiState.totalDosesInput.isNotBlank() &&
+                (uiState.openEnded || uiState.totalDosesInput.isNotBlank()) &&
                 !uiState.hasDuplicateActiveSchedule,
             modifier = Modifier.fillMaxWidth().padding(top = 24.dp),
         ) {
@@ -304,11 +323,17 @@ private const val MAX_PREVIEW_CELLS = 6
 @Composable
 private fun FirstDayPreview(uiState: CreateScheduleUiState) {
     val interval = uiState.intervalHours ?: return
-    // Al editar solo se crean las tomas que faltan; las hechas se quedan como están.
-    val total = uiState.totalDosesInput.toIntOrNull()
-        ?.minus(uiState.keptDoseCount)
-        ?.takeIf { it > 0 } ?: return
-    val times = DoseScheduleCalculator.computeDoseTimes(uiState.startAtMillis, interval, total)
+    // Sin fin se pinta la primera ventana de tomas, que es lo que se crea al guardar.
+    val times = if (uiState.openEnded) {
+        DoseScheduleCalculator.openEndedWindow(uiState.startAtMillis, interval, uiState.startAtMillis)
+    } else {
+        // Al editar solo se crean las tomas que faltan; las hechas se quedan como están.
+        val total = uiState.totalDosesInput.toIntOrNull()
+            ?.minus(uiState.keptDoseCount)
+            ?.takeIf { it > 0 } ?: return
+        DoseScheduleCalculator.computeDoseTimes(uiState.startAtMillis, interval, total)
+    }
+    val total = times.size
     val firstDay = times.takeWhile { it < uiState.startAtMillis + 24 * 3_600_000L }.take(MAX_PREVIEW_CELLS)
     val pill = PillStyles.forMedication(uiState.nregistro, uiState.nombreMedicamento)
 
@@ -337,7 +362,11 @@ private fun FirstDayPreview(uiState: CreateScheduleUiState) {
         }
     }
     Text(
-        "$total ${if (total == 1) "toma" else "tomas"}${if (uiState.isEditing) " por hacer" else ""} · la última el ${previewDay.format(Date(times.last())).replace(".", "")}",
+        if (uiState.openEnded) {
+            "Se repite hasta que la cierres · se preparan las tomas de los próximos 7 días"
+        } else {
+            "$total ${if (total == 1) "toma" else "tomas"}${if (uiState.isEditing) " por hacer" else ""} · la última el ${previewDay.format(Date(times.last())).replace(".", "")}"
+        },
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.padding(top = 8.dp),

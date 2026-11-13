@@ -93,3 +93,54 @@ class ScheduleEditPlannerTest {
         assertNull(ScheduleEditPlanner.plan(doses, intervalHours = 0, totalDoses = 2, nextDoseAtMillis = start))
     }
 }
+
+class OpenEndedEditPlannerTest {
+
+    private val hour = 3_600_000L
+    private val day = 24 * hour
+    private val start = 1_000_000_000_000L
+
+    private fun dose(id: String, number: Int, at: Long, status: DoseStatus) = MedicationDose(
+        id = id,
+        scheduleId = "s1",
+        doseNumber = number,
+        scheduledAtMillis = at,
+        status = status,
+        takenAtMillis = null,
+        historyEntryId = null,
+    )
+
+    @Test
+    fun `editing an open-ended schedule keeps done doses and regenerates the window`() {
+        val doses = listOf(
+            dose("d1", 1, start, DoseStatus.TAKEN),
+            dose("d2", 2, start + day, DoseStatus.PENDING),
+            dose("d3", 3, start + 2 * day, DoseStatus.PENDING),
+        )
+        val now = start + 2 * hour
+        val next = start + 12 * hour
+
+        val plan = ScheduleEditPlanner.planOpenEnded(doses, intervalHours = 48, nextDoseAtMillis = next, nowMillis = now)!!
+
+        assertEquals(
+            listOf(PlannedDose(2, next), PlannedDose(3, next + 2 * day), PlannedDose(4, next + 4 * day), PlannedDose(5, next + 6 * day)),
+            plan.newDoses,
+        )
+        assertEquals(start, plan.startAtMillis)
+        assertEquals(next + 6 * day, plan.endAtMillis)
+    }
+
+    @Test
+    fun `an invalid interval is rejected`() {
+        assertNull(ScheduleEditPlanner.planOpenEnded(emptyList(), intervalHours = 0, nextDoseAtMillis = start, nowMillis = start))
+    }
+
+    @Test
+    fun `a fixed total is still planned as before`() {
+        val doses = listOf(dose("d1", 1, start, DoseStatus.TAKEN), dose("d2", 2, start + day, DoseStatus.PENDING))
+
+        val plan = ScheduleEditPlanner.plan(doses, intervalHours = 24, totalDoses = 2, nextDoseAtMillis = start + day)!!
+
+        assertEquals(listOf(PlannedDose(2, start + day)), plan.newDoses)
+    }
+}
