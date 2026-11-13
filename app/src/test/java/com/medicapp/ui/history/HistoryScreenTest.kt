@@ -7,7 +7,6 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import com.medicapp.data.repository.FakeMedicationHistoryRepository
-import com.medicapp.data.repository.FakeReasonRepository
 import com.medicapp.model.TakenEntry
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -41,10 +40,7 @@ class HistoryScreenTest {
         onEditEntry: (TakenEntry) -> Unit = {},
         onOpenMedication: (TakenEntry) -> Unit = {},
     ) {
-        val viewModel = HistoryViewModel(
-            FakeMedicationHistoryRepository(entries),
-            FakeReasonRepository(),
-        )
+        val viewModel = HistoryViewModel(FakeMedicationHistoryRepository(entries))
         composeRule.setContent {
             HistoryScreen(
                 contentPadding = PaddingValues(),
@@ -74,11 +70,12 @@ class HistoryScreenTest {
     }
 
     @Test
-    fun `entries are grouped under their month`() {
+    fun `entries are grouped under their day with hour and reason in the row`() {
         setContent(listOf(entry("1", "12345", "Ibuprofeno")))
 
-        // timestamp 0 es enero de 1970; el antetítulo se pinta en mayúsculas.
-        composeRule.onNodeWithText("ENERO 1970", substring = true).assertExists()
+        // timestamp 0 es el 1 de enero de 1970 (o el 31 de diciembre según la zona): otro año, con fecha completa.
+        composeRule.onNodeWithText("de 19", substring = true).assertExists()
+        composeRule.onNodeWithText("· Dolor de cabeza", substring = true).assertExists()
     }
 
     @Test
