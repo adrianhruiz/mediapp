@@ -23,6 +23,26 @@ class MedicationLabelTest {
     }
 
     @Test
+    fun `a dose naming the active ingredient is not repeated when the name has the same amount`() {
+        assertEquals(
+            "Ebastina Cinfa" to "10 mg comprimidos recubiertos con pelicula EFG",
+            nameAndPresentation("EBASTINA CINFA 10 mg COMPRIMIDOS RECUBIERTOS CON PELICULA EFG", "10 mg ebastina"),
+        )
+        assertEquals(
+            "Dalsy" to "20 mg/ml suspensión oral",
+            nameAndPresentation("DALSY 20 mg/ml SUSPENSIÓN ORAL", "20 MG/ML ibuprofeno"),
+        )
+    }
+
+    @Test
+    fun `a dose with a different amount is still added`() {
+        assertEquals(
+            "Ebastina Cinfa" to "20 mg ebastina · 10 mg comprimidos",
+            nameAndPresentation("EBASTINA CINFA 10 mg COMPRIMIDOS", "20 mg ebastina"),
+        )
+    }
+
+    @Test
     fun `without dose nor presentation there is no second line`() {
         assertEquals("Pomada casera" to null, nameAndPresentation("Pomada casera", null))
     }
