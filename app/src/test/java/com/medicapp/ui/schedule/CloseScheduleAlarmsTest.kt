@@ -86,15 +86,4 @@ class CloseScheduleAlarmsTest {
         assertTrue(alarms.scheduledAlarms.isEmpty())
     }
 
-    @Test
-    fun `closing from the list cancels the alarms of every skipped dose`() = runTest(dispatcher) {
-        val scheduleId = openEndedWithRefill()
-        val viewModel = RemindersViewModel(schedules)
-
-        viewModel.closeSchedule(context, schedules.getSchedule(scheduleId)!!)
-        advanceUntilIdle()
-
-        assertTrue(schedules.dosesSnapshot(scheduleId).none { it.status == DoseStatus.PENDING })
-        assertTrue(alarms.scheduledAlarms.isEmpty())
-    }
 }

@@ -30,6 +30,15 @@ class ScheduleDurationTest {
     }
 
     @Test
+    fun `days covers the doses of a stored schedule and stays within bounds`() {
+        // 4 tomas semanales son 4 semanas; 4 tomas cada 8 h caben en 2 días (se redondea arriba).
+        assertEquals(28, ScheduleDuration.days(totalDoses = 4, intervalHours = 168))
+        assertEquals(2, ScheduleDuration.days(totalDoses = 4, intervalHours = 8))
+        assertEquals(1, ScheduleDuration.days(totalDoses = 1, intervalHours = 8))
+        assertEquals(ScheduleDuration.MAX_DAYS, ScheduleDuration.days(totalDoses = 1000, intervalHours = 168))
+    }
+
+    @Test
     fun `summary shows the total and when the last dose is`() {
         val last = LocalDateTime.of(2026, 11, 7, 21, 32).atZone(madrid).toInstant().toEpochMilli()
 

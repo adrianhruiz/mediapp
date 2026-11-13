@@ -69,8 +69,9 @@ class AllergiesScreenTest {
             ),
         )
 
-        composeRule.onNodeWithText("FAMILIAS").assertIsDisplayed()
-        composeRule.onNodeWithText("COMPONENTES ACTIVOS").assertIsDisplayed()
+        // La cabecera lleva el recuento: con él no hace falta contar filas.
+        composeRule.onNodeWithText("FAMILIAS ATC · 1").assertIsDisplayed()
+        composeRule.onNodeWithText("COMPONENTES ACTIVOS · 2").assertIsDisplayed()
         composeRule.onAllNodesWithText("COMPONENTE ACTIVO").assertCountEquals(0)
         composeRule.onNodeWithText("Bencilpenicilina").assertIsDisplayed()
         composeRule.onNodeWithText("M01A").assertIsDisplayed()

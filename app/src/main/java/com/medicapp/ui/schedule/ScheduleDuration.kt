@@ -33,6 +33,18 @@ object ScheduleDuration {
         return (windowHours + intervalHours - 1) / intervalHours
     }
 
+    /**
+     * Vuelta atrás para cargar una pauta en el formulario: los días que cubren [totalDoses]
+     * tomas cada [intervalHours] horas (`ceil(tomas × horas / 24)`), entre 1 y [MAX_DAYS].
+     * No siempre es exacto (4 tomas cada 8 h caben en 2 días, pero 2 días dan 6 tomas), por eso
+     * quien edita conserva el total original hasta que toca frecuencia o duración.
+     */
+    fun days(totalDoses: Int, intervalHours: Int): Int {
+        if (totalDoses < 1 || intervalHours < 1) return 1
+        val hours = totalDoses.toLong() * intervalHours
+        return ((hours + 23) / 24).coerceIn(1L, MAX_DAYS.toLong()).toInt()
+    }
+
     /** Resumen en una línea: «21 tomas · última el 7 nov 21:32». */
     fun summary(totalDoses: Int, lastDoseMillis: Long, zone: ZoneId = ZoneId.systemDefault()): String {
         val at = lastDoseFormat.format(Instant.ofEpochMilli(lastDoseMillis).atZone(zone)).replace(".", "")
